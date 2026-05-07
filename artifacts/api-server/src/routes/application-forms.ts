@@ -1,4 +1,5 @@
 import { Router } from "express";
+import { DEFAULT_SECTIONS } from "../lib/default-sections";
 import { eq, desc, inArray, and } from "drizzle-orm";
 import { sql } from "drizzle-orm";
 import { db, applicationFormsTable, applicationSubmissionsTable, programsTable, candidatesTable, candidatePreferencesTable, specialitiesTable, paymentSettingsTable } from "@workspace/db";
@@ -57,8 +58,14 @@ router.post(
     };
     if (!programId || !title) return res.status(400).json({ error: "programId and title required" });
 
-    const { customFields } = req.body as { customFields?: unknown[] };
+    const { customFields, loadDefaults } = req.body as { customFields?: unknown[]; loadDefaults?: boolean };
     const token = generateToken();
+    
+    let finalSectionsConfig = sectionsConfig ?? [];
+    if (loadDefaults && finalSectionsConfig.length === 0) {
+      finalSectionsConfig = DEFAULT_SECTIONS;
+    }
+
     const [form] = await db.insert(applicationFormsTable).values({
       token,
       programId,
@@ -68,7 +75,7 @@ router.post(
       isActive: true,
       createdBy: req.user!.userId,
       customFields: (customFields as never) ?? [],
-      sectionsConfig: (sectionsConfig as never) ?? [],
+      sectionsConfig: (finalSectionsConfig as never),
     }).returning();
     res.status(201).json(form);
   }
@@ -1059,7 +1066,7 @@ router.post("/apply/:token", async (req, res) => {
       // If standard mapping exists, use it
       if (f.isStandard && f.mapping) {
         // Special handling for JSON fields if they come as arrays/objects
-        if (['medicalConditions', 'diagnosticSkills', 'surgicalExperience', 'qualificationMatrix'].includes(f.mapping)) {
+        if (['specialization', 'medicalConditions', 'diagnosticSkills', 'surgicalExperience', 'qualificationMatrix'].includes(f.mapping)) {
           if (val && typeof val !== 'string') val = JSON.stringify(val);
         }
         subData[f.mapping] = val;
@@ -1100,6 +1107,37 @@ router.post("/apply/:token", async (req, res) => {
   } as any).returning();
 
   res.status(201).json({ success: true, submissionId: sub!.id });
+});
+
+// Admin: delete submission
+router.delete(
+  "/application-submissions/:id",
+  requireAuth,
+  requireRole("super_admin", "program_admin"),
+  async (req, res) => {
+    const id = Number(req.params.id);
+    const deleted = await db.delete(applicationSubmissionsTable).where(eq(applicationSubmissionsTable.id, id)).returning();
+    if (deleted.length === 0) return res.status(404).json({ error: "Submission not found" });
+    res.json({ message: "Submission deleted" });
+  }
+);
+
+// Admin: bulk delete submissions
+router.post(
+  "/application-submissions/bulk-delete",
+  requireAuth,
+  requireRole("super_admin", "program_admin"),
+  async (req, res) => {
+    const { ids } = req.body as { ids: number[] };
+    if (!Array.isArray(ids) || ids.length === 0) return res.status(400).json({ error: "No IDs provided" });
+    await db.delete(applicationSubmissionsTable).where(sql`${applicationSubmissionsTable.id} IN (${sql.join(ids, sql`, `)})`);
+    res.json({ message: `${ids.length} submissions deleted` });
+  }
+);
+
+// Admin: get default sections
+router.get("/application-forms/default-sections", requireAuth, requireRole("super_admin", "program_admin"), (req, res) => {
+  res.json(DEFAULT_SECTIONS);
 });
 
 export default router;

@@ -96,10 +96,10 @@ export default function LoginPage() {
             <p>Password resets can only be done by your system administrator.</p>
             <div className="rounded-lg bg-orange-50 border border-orange-200 p-3 space-y-1 text-orange-900">
               <p className="font-semibold text-sm">Contact your Administrator</p>
-              <p className="text-xs">Email: <a href="mailto:admin@sankaraeye.com" className="underline">admin@sankaraeye.com</a></p>
+              <p className="text-xs">Email: <a href="mailto:prabhanjan@sankaraeye.com" className="underline">prabhanjan@sankaraeye.com</a></p>
               <p className="text-xs">Please provide your registered email address to receive a temporary password.</p>
             </div>
-            <p className="text-xs">New users: your initial password is <code className="bg-muted px-1 rounded font-mono">Welcome@123</code></p>
+
           </div>
           <Button className="w-full mt-2" onClick={() => setForgotOpen(false)}>Close</Button>
         </DialogContent>

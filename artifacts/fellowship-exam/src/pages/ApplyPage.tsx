@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
+import logoUrl from "@assets/seh_sav_logo_1777703794142.jpg";
 import { Loader2, AlertCircle, CheckCircle2, ChevronRight, ChevronLeft, ChevronDown, CreditCard } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -118,6 +119,7 @@ export default function ApplyPage({ token }: { token: string }) {
   const [confirming, setConfirming] = useState(false);
   const [confirmError, setConfirmError] = useState<string | null>(null);
   const [submissionId, setSubmissionId] = useState<string | null>(null);
+  const [paymentConfig, setPaymentConfig] = useState<{ amount: number; currency: string; description: string; mock: boolean } | null>(null);
 
   // Load Razorpay Script
   useEffect(() => {
@@ -153,6 +155,12 @@ export default function ApplyPage({ token }: { token: string }) {
       })
       .catch((e: Error) => setFormError(e.message))
       .finally(() => setLoading(false));
+
+    // Load payment config
+    fetch(`${API}/apply/${token}/payment-config`)
+      .then(r => r.json())
+      .then(data => setPaymentConfig(data))
+      .catch(e => console.error("Failed to load payment config", e));
 
     // Load Razorpay script
     const script = document.createElement("script");
@@ -253,10 +261,11 @@ export default function ApplyPage({ token }: { token: string }) {
       const finalForm = { ...form, ...uploadedUrls };
 
       // 2. Create Order
+      const specCount = Array.isArray(form.specialization) ? form.specialization.length : 1;
       const orderRes = await fetch(`${API}/payment/create-order`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ token }),
+        body: JSON.stringify({ token, specializationCount: specCount }),
       });
       
       const orderData = await orderRes.json();
@@ -385,7 +394,10 @@ export default function ApplyPage({ token }: { token: string }) {
               <CheckCircle2 className="w-9 h-9 text-green-600" />
             </div>
             <h2 className="text-2xl font-bold text-green-800 mb-1">Payment Successful!</h2>
-            <p className="text-sm text-green-700">Your payment of <strong>Rs. 2750</strong> has been verified by Razorpay.</p>
+            <p className="text-sm text-green-700">
+              Your payment of <strong>{paymentConfig ? `${paymentConfig.currency} ${((paymentConfig.amount * (Array.isArray(finalForm.specialization) ? finalForm.specialization.length : 1)) / 100).toLocaleString("en-IN")}` : `Rs. ${(2750 * (Array.isArray(finalForm.specialization) ? finalForm.specialization.length : 1)).toLocaleString("en-IN")}`}</strong> has been verified by Razorpay.
+              {Array.isArray(finalForm.specialization) && finalForm.specialization.length > 1 && ` (Rs. 2,750 x ${finalForm.specialization.length} specializations)`}
+            </p>
           </div>
 
           {/* Payment ID Box */}
@@ -470,6 +482,9 @@ export default function ApplyPage({ token }: { token: string }) {
 
             {/* Title Bar */}
             <div className="bg-gradient-to-r from-green-600 to-emerald-600 px-8 py-8 text-white text-center print:bg-green-700">
+              <div className="flex justify-center mb-6 no-print">
+                <img src={logoUrl} alt="Sankara Logo" className="h-20 w-auto rounded-xl shadow-lg bg-white p-2" />
+              </div>
               <div className="w-16 h-16 bg-white/20 rounded-full flex items-center justify-center mx-auto mb-3 no-print">
                 <CheckCircle2 className="w-9 h-9" />
               </div>
@@ -491,7 +506,10 @@ export default function ApplyPage({ token }: { token: string }) {
                     </div>
                     <div>
                       <span className="text-slate-500 text-xs">Amount Paid</span>
-                      <p className="font-bold text-green-700 text-base">Rs. 2,750 /-</p>
+                      <p className="font-bold text-green-700 text-base">
+                        {paymentConfig ? `${paymentConfig.currency} ${((paymentConfig.amount * (Array.isArray(appForm.specialization) ? appForm.specialization.length : 1)) / 100).toLocaleString("en-IN")}` : `Rs. ${(2750 * (Array.isArray(appForm.specialization) ? appForm.specialization.length : 1)).toLocaleString("en-IN")}`} /-
+                        {Array.isArray(appForm.specialization) && appForm.specialization.length > 1 && <span className="text-[10px] ml-1 opacity-70">(Rs. 2,750 x {appForm.specialization.length})</span>}
+                      </p>
                     </div>
                   </div>
                 </div>
@@ -566,6 +584,12 @@ export default function ApplyPage({ token }: { token: string }) {
                   <div className="text-left">
                     <p className="text-sm font-bold text-slate-700">Application complete</p>
                     <p className="text-xs text-slate-500">You may close this window</p>
+                    <div className="mt-3 pt-3 border-t border-slate-200">
+                      <p className="text-[10px] text-slate-400 font-medium leading-relaxed">
+                        If there are any issues, contact: <br />
+                        <a href="mailto:radhika@sankaraeye.com" className="text-blue-600 hover:underline">radhika@sankaraeye.com</a> & <a href="mailto:tejaswini@sankaraeye.com" className="text-blue-600 hover:underline">tejaswini@sankaraeye.com</a>
+                      </p>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -599,18 +623,24 @@ export default function ApplyPage({ token }: { token: string }) {
       {/* Header */}
       <div className="bg-white border-b border-slate-200 sticky top-0 z-50 backdrop-blur-sm bg-white/80">
         <div className="max-w-4xl mx-auto px-4 py-4">
-          <div className="flex items-center justify-between mb-4">
-            <div>
-              <Badge variant="outline" className="mb-2 border-orange-200 text-orange-700 bg-orange-50 px-3 py-1 text-xs font-semibold uppercase tracking-wider">
-                {formInfo.programName}
-              </Badge>
-              <h1 className="text-xl md:text-2xl font-bold text-slate-900 line-clamp-1">{formInfo.title}</h1>
+          <div className="flex items-center justify-between gap-4 mb-4">
+            <div className="flex items-center gap-4">
+              <img src={logoUrl} alt="Sankara Logo" className="h-12 w-auto rounded-lg shadow-sm bg-white p-1.5 shrink-0" />
+              <div>
+                <Badge variant="outline" className="mb-1 border-orange-200 text-orange-700 bg-orange-50 px-3 py-1 text-[10px] font-semibold uppercase tracking-wider">
+                  {formInfo.programName}
+                </Badge>
+                <h1 className="text-xl md:text-2xl font-bold text-slate-900 mb-1">{formInfo.title}</h1>
+              </div>
             </div>
             <div className="hidden md:block text-right">
               <div className="text-sm font-medium text-slate-500 mb-1">Step {step + 1} of {sections.length}</div>
               <div className="text-xs font-bold text-orange-600">{Math.round(progress)}% Complete</div>
             </div>
           </div>
+          {formInfo.description && (
+            <p className="text-sm text-slate-600 whitespace-pre-wrap mb-4">{formInfo.description}</p>
+          )}
           <div className="h-2 w-full bg-slate-100 rounded-full overflow-hidden">
             <div 
               className="h-full bg-orange-600 transition-all duration-500 ease-out shadow-[0_0_10px_rgba(234,88,12,0.3)]" 
@@ -625,7 +655,10 @@ export default function ApplyPage({ token }: { token: string }) {
           <div className="bg-slate-50/50 px-6 py-8 border-b border-slate-100">
             <h2 className="text-2xl font-bold text-slate-900 mb-2">{currentSection.title}</h2>
             {currentSection.description && (
-              <p className="text-slate-600 leading-relaxed whitespace-pre-wrap">{currentSection.description}</p>
+              <div 
+                className="text-slate-600 leading-relaxed prose prose-sm max-w-none prose-slate"
+                dangerouslySetInnerHTML={{ __html: currentSection.description }}
+              />
             )}
           </div>
           
@@ -657,18 +690,21 @@ export default function ApplyPage({ token }: { token: string }) {
                    )}
 
                    {field.type === 'info' && (
-                     <div className="bg-orange-50 border-l-4 border-orange-500 p-6 rounded-r-xl shadow-sm">
-                        <div className="flex items-start gap-4">
-                          <div className="w-10 h-10 bg-orange-100 rounded-full flex items-center justify-center flex-shrink-0">
-                            <CreditCard className="w-5 h-5 text-orange-600" />
-                          </div>
-                          <div>
-                            <h4 className="text-sm font-bold text-orange-900 uppercase tracking-wider mb-1">Payment Instruction</h4>
-                            <p className="text-sm text-orange-800 whitespace-pre-wrap leading-relaxed font-medium">{field.defaultValue}</p>
-                          </div>
-                        </div>
-                     </div>
-                   )}
+                      <div className="bg-orange-50 border-l-4 border-orange-500 p-6 rounded-r-xl shadow-sm">
+                         <div className="flex items-start gap-4">
+                           <div className="w-10 h-10 bg-orange-100 rounded-full flex items-center justify-center flex-shrink-0">
+                             <CreditCard className="w-5 h-5 text-orange-600" />
+                           </div>
+                           <div>
+                             <h4 className="text-sm font-bold text-orange-900 uppercase tracking-wider mb-1">{field.label || "Instruction"}</h4>
+                             <div 
+                               className="text-sm text-orange-800 leading-relaxed font-medium prose prose-sm max-w-none prose-orange"
+                               dangerouslySetInnerHTML={{ __html: field.defaultValue || "" }}
+                             />
+                           </div>
+                         </div>
+                      </div>
+                    )}
 
                  {field.type === 'phone' && (
                    <div className="flex gap-2">
@@ -997,6 +1033,27 @@ export default function ApplyPage({ token }: { token: string }) {
                  </div>
                );
              })}
+
+             {step === sections.length - 1 && (
+               <div className="mb-6 p-5 bg-orange-50 border-2 border-orange-200 rounded-2xl shadow-sm">
+                 <div className="flex items-center justify-between">
+                   <div className="flex items-center gap-3">
+                     <div className="w-10 h-10 bg-orange-100 rounded-full flex items-center justify-center">
+                       <CreditCard className="w-5 h-5 text-orange-600" />
+                     </div>
+                     <div>
+                       <p className="text-xs font-bold text-orange-800 uppercase tracking-wider">Total Amount to Pay</p>
+                       <p className="text-[10px] text-orange-600">Rs. 2,750 x {Array.isArray(form.specialization) ? form.specialization.length : 1} Specialization{Array.isArray(form.specialization) && form.specialization.length > 1 ? 's' : ''}</p>
+                     </div>
+                   </div>
+                   <div className="text-right">
+                     <span className="text-2xl font-black text-orange-900">
+                       Rs. {(2750 * (Array.isArray(form.specialization) ? form.specialization.length : 1)).toLocaleString("en-IN")}
+                     </span>
+                   </div>
+                 </div>
+               </div>
+             )}
 
              {submitError && (
                <div className="p-4 bg-red-50 border border-red-200 rounded-xl flex items-start gap-3">

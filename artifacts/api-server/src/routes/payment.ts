@@ -35,8 +35,9 @@ router.post("/payment/create-order", async (req, res) => {
     });
 
     // 4. Create order using SDK
+    const { specializationCount = 1 } = req.body as { specializationCount?: number };
     const options = {
-      amount: Number(setting.amount), // amount is already in paise (smallest unit) in DB
+      amount: Number(setting.amount) * specializationCount, // amount is already in paise, multiply by count
       currency: setting.currency || "INR",
       receipt: `receipt_form_${form.id}_${Date.now()}`,
     };

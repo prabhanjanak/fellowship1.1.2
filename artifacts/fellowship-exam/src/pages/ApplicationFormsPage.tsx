@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 import { useAuth } from "@/contexts/AuthContext";
@@ -34,6 +34,7 @@ interface ApplicationForm {
   title: string; description: string | null; deadline: string | null;
   isActive: boolean; createdAt: string; submissionCount: number; pendingCount: number;
   customFields?: CustomField[];
+  sectionsConfig?: any[];
 }
 interface Submission {
   id: number; formId: number; status: string; fullName: string; email: string;
@@ -324,6 +325,51 @@ function CustomFieldEditor({
   );
 }
 
+function RichTextArea({ value, onChange, placeholder, label }: { value: string; onChange: (v: string) => void; placeholder?: string; label?: string }) {
+  const editorRef = useRef<HTMLDivElement>(null);
+
+  const execCommand = (command: string, value: string = "") => {
+    document.execCommand(command, false, value);
+    if (editorRef.current) {
+      onChange(editorRef.current.innerHTML);
+    }
+  };
+
+  // Sync external value to editor (only if different to avoid cursor jumps)
+  useEffect(() => {
+    if (editorRef.current && editorRef.current.innerHTML !== value) {
+      editorRef.current.innerHTML = value || "";
+    }
+  }, [value]);
+
+  return (
+    <div className="space-y-1.5">
+      {label && <Label className="text-[10px] font-bold text-muted-foreground uppercase">{label}</Label>}
+      <div className="border rounded-md overflow-hidden bg-white dark:bg-slate-950 flex flex-col">
+        <div className="flex items-center gap-0.5 p-1 bg-muted/30 border-b flex-wrap">
+          <Button variant="ghost" size="sm" className="h-7 px-2 font-bold hover:bg-muted" onClick={() => execCommand("bold")}>B</Button>
+          <Button variant="ghost" size="sm" className="h-7 px-2 italic hover:bg-muted" onClick={() => execCommand("italic")}>I</Button>
+          <Button variant="ghost" size="sm" className="h-7 px-2 underline hover:bg-muted" onClick={() => execCommand("underline")}>U</Button>
+          <Separator orientation="vertical" className="h-4 mx-1" />
+          <Button variant="ghost" size="sm" className="h-7 px-2 hover:bg-muted" onClick={() => execCommand("insertOrderedList")}>1.</Button>
+          <Button variant="ghost" size="sm" className="h-7 px-2 hover:bg-muted" onClick={() => execCommand("insertUnorderedList")}>•</Button>
+          <Separator orientation="vertical" className="h-4 mx-1" />
+          <Button variant="ghost" size="sm" className="h-7 px-2 text-[10px] uppercase font-bold hover:bg-muted" onClick={() => execCommand("removeFormat")}>Clear</Button>
+        </div>
+        <div
+          ref={editorRef}
+          contentEditable
+          onInput={(e) => onChange(e.currentTarget.innerHTML)}
+          placeholder={placeholder}
+          className="min-h-[120px] p-3 text-sm focus:outline-none overflow-y-auto prose prose-sm max-w-none dark:prose-invert"
+          style={{ whiteSpace: "pre-wrap" }}
+        />
+      </div>
+      <p className="text-[10px] text-muted-foreground italic">Tip: Use the toolbar to format. No need to type HTML tags.</p>
+    </div>
+  );
+}
+
 export default function ApplicationFormsPage() {
   const { user } = useAuth();
   const { toast } = useToast();
@@ -337,9 +383,10 @@ export default function ApplicationFormsPage() {
   const [copiedId, setCopiedId] = useState<number | null>(null);
   const [deleteConfirmId, setDeleteConfirmId] = useState<number | null>(null);
   const [exporting, setExporting] = useState(false);
-  const [createFormData, setCreateFormData] = useState({ programId: "", title: "", description: "", deadline: "" });
+  const [createFormData, setCreateFormData] = useState({ programId: "", title: "", description: "", deadline: "", loadDefaults: true });
   const [createCustomFields, setCreateCustomFields] = useState<CustomField[]>([]);
   const [editCustomFields, setEditCustomFields] = useState<CustomField[]>([]);
+  const [editSectionsConfig, setEditSectionsConfig] = useState<any[]>([]);
 
   // Google Sheets integration state (per edit dialog + success dialog)
   const [googleSheetsConfig, setGoogleSheetsConfig] = useState({ spreadsheetId: "", sheetName: "Form Responses 1", serviceAccountJson: "" });
@@ -385,12 +432,12 @@ export default function ApplicationFormsPage() {
   });
 
   const createMutation = useMutation({
-    mutationFn: (data: { programId: number; title: string; description?: string; deadline?: string; customFields: CustomField[] }) =>
+    mutationFn: (data: { programId: number; title: string; description?: string; deadline?: string; customFields: CustomField[]; loadDefaults?: boolean }) =>
       api.post<ApplicationForm>("/application-forms", data),
     onSuccess: (form) => {
       qc.invalidateQueries({ queryKey: ["application-forms"] });
       setCreateOpen(false);
-      setCreateFormData({ programId: "", title: "", description: "", deadline: "" });
+      setCreateFormData({ programId: "", title: "", description: "", deadline: "", loadDefaults: true });
       setCreateCustomFields([]);
       setCreatedForm(form);
     },
@@ -404,7 +451,7 @@ export default function ApplicationFormsPage() {
   });
 
   const updateFormMutation = useMutation({
-    mutationFn: (data: { id: number; title?: string; description?: string; deadline?: string; customFields?: CustomField[] }) => {
+    mutationFn: (data: { id: number; title?: string; description?: string; deadline?: string; customFields?: CustomField[]; sectionsConfig?: any[] }) => {
       const { id, ...body } = data;
       return api.patch<ApplicationForm>(`/application-forms/${id}`, body);
     },
@@ -413,6 +460,7 @@ export default function ApplicationFormsPage() {
       qc.invalidateQueries({ queryKey: ["application-forms"] });
       setEditForm(null);
       setEditCustomFields([]);
+      setEditSectionsConfig([]);
     },
     onError: (e: Error) => toast({ title: "Error", description: e.message, variant: "destructive" }),
   });
@@ -474,6 +522,27 @@ export default function ApplicationFormsPage() {
       qc.invalidateQueries({ queryKey: ["submissions", formId] });
       qc.invalidateQueries({ queryKey: ["application-forms"] });
       qc.invalidateQueries({ queryKey: ["candidates"] });
+      setSelectedIds([]);
+    },
+    onError: (e: Error) => toast({ title: "Error", description: e.message, variant: "destructive" }),
+  });
+
+  const deleteSubMutation = useMutation({
+    mutationFn: (id: number) => api.delete(`/application-submissions/${id}`),
+    onSuccess: () => {
+      toast({ title: "Submission deleted" });
+      qc.invalidateQueries({ queryKey: ["submissions", viewFormId] });
+      qc.invalidateQueries({ queryKey: ["application-forms"] });
+    },
+    onError: (e: Error) => toast({ title: "Error", description: e.message, variant: "destructive" }),
+  });
+
+  const bulkDeleteSubsMutation = useMutation({
+    mutationFn: (ids: number[]) => api.post(`/application-submissions/bulk-delete`, { ids }),
+    onSuccess: () => {
+      toast({ title: "Submissions deleted" });
+      qc.invalidateQueries({ queryKey: ["submissions", viewFormId] });
+      qc.invalidateQueries({ queryKey: ["application-forms"] });
       setSelectedIds([]);
     },
     onError: (e: Error) => toast({ title: "Error", description: e.message, variant: "destructive" }),
@@ -872,6 +941,16 @@ export default function ApplicationFormsPage() {
               disabled={bulkAction.isPending}>
               <Ban className="h-3 w-3" /> Reject All
             </Button>
+            <Button size="sm" variant="destructive" className="gap-1.5 h-7 text-xs bg-red-600 hover:bg-red-700"
+              onClick={() => {
+                if (confirm(`Are you sure you want to delete ${selectedIds.length} submissions? This cannot be undone.`)) {
+                  bulkDeleteSubsMutation.mutate(selectedIds);
+                }
+              }}
+              disabled={bulkDeleteSubsMutation.isPending}>
+              {bulkDeleteSubsMutation.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : <Trash2 className="h-3 w-3" />}
+              Delete Selected
+            </Button>
             <Button size="sm" variant="ghost" className="h-7 text-xs ml-auto" onClick={() => setSelectedIds([])}>
               Clear
             </Button>
@@ -938,9 +1017,18 @@ export default function ApplicationFormsPage() {
                         <td className="px-4 py-3 text-xs text-muted-foreground">
                           {new Date(s.submittedAt).toLocaleDateString("en-IN")}
                         </td>
-                        <td className="px-4 py-3 text-right">
+                        <td className="px-4 py-3 text-right flex items-center justify-end gap-1">
                           <Button variant="ghost" size="sm" className="gap-1 h-7" onClick={() => setViewSubId(s.id)}>
                             <Eye className="h-3.5 w-3.5" /> Review
+                          </Button>
+                          <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-muted-foreground hover:text-red-600"
+                            onClick={() => {
+                              if (confirm("Are you sure you want to delete this submission?")) {
+                                deleteSubMutation.mutate(s.id);
+                              }
+                            }}
+                            disabled={deleteSubMutation.isPending}>
+                            <Trash2 className="h-3.5 w-3.5" />
                           </Button>
                         </td>
                       </tr>
@@ -1032,6 +1120,7 @@ export default function ApplicationFormsPage() {
                     <Button variant="outline" size="sm" className="gap-1" onClick={() => {
                       setEditForm(form);
                       setEditCustomFields(form.customFields ?? []);
+                      setEditSectionsConfig(form.sectionsConfig ?? []);
                     }}>
                       <Settings2 className="h-3.5 w-3.5" /> Configure
                     </Button>
@@ -1085,15 +1174,26 @@ export default function ApplicationFormsPage() {
             <Separator />
             
             <div className="space-y-2 bg-blue-50/50 dark:bg-blue-950/20 p-3 rounded-lg border border-blue-100 dark:border-blue-900/50 text-sm">
-              <p className="font-semibold text-blue-800 dark:text-blue-300">Standard Built-in Fields</p>
-              <p className="text-xs text-muted-foreground">This fellowship application automatically includes the following core sections. You do not need to add these as custom fields:</p>
-              <ul className="grid grid-cols-2 gap-x-4 gap-y-1 mt-1 text-xs text-muted-foreground list-disc pl-4">
-                <li>Personal Details & Contact</li>
-                <li>Specialization & Unit Preferences</li>
-                <li>Medical & Surgical History</li>
-                <li>Educational Qualifications (MBBS, DO, MS/MD)</li>
-                <li>Document Uploads (LORs, Photo, Payment)</li>
-              </ul>
+              <div className="flex items-center justify-between">
+                <p className="font-semibold text-blue-800 dark:text-blue-300">Standard Fellowship Template</p>
+                <div className="flex items-center gap-2">
+                  <span className="text-[10px] text-blue-600 font-bold uppercase">Include?</span>
+                  <Switch 
+                    checked={createFormData.loadDefaults} 
+                    onCheckedChange={(v) => setCreateFormData(f => ({ ...f, loadDefaults: v }))} 
+                  />
+                </div>
+              </div>
+              <p className="text-xs text-muted-foreground">This template includes core sections like Specialization, Units, Medical History, etc. You can fully edit them later.</p>
+              {createFormData.loadDefaults && (
+                <ul className="grid grid-cols-2 gap-x-4 gap-y-1 mt-1 text-xs text-muted-foreground list-disc pl-4">
+                  <li>Personal Details & Contact</li>
+                  <li>Specialization & Unit Preferences</li>
+                  <li>Medical & Surgical History</li>
+                  <li>Educational Qualifications</li>
+                  <li>Document Uploads</li>
+                </ul>
+              )}
             </div>
 
             <Separator />
@@ -1141,6 +1241,7 @@ export default function ApplicationFormsPage() {
                 programId: Number(createFormData.programId), title: createFormData.title,
                 description: createFormData.description || undefined, deadline: createFormData.deadline || undefined,
                 customFields: createCustomFields,
+                loadDefaults: createFormData.loadDefaults,
               })}>
               {createMutation.isPending ? "Creating…" : "Create & Get Link"}
             </Button>
@@ -1218,16 +1319,157 @@ export default function ApplicationFormsPage() {
 
               <Separator />
 
-              <div className="space-y-2 bg-blue-50/50 dark:bg-blue-950/20 p-3 rounded-lg border border-blue-100 dark:border-blue-900/50 text-sm">
-                <p className="font-semibold text-blue-800 dark:text-blue-300">Standard Built-in Fields</p>
-                <p className="text-xs text-muted-foreground">This fellowship application automatically includes the following core sections. You do not need to add these as custom fields:</p>
-                <ul className="grid grid-cols-2 gap-x-4 gap-y-1 mt-1 text-xs text-muted-foreground list-disc pl-4">
-                  <li>Personal Details & Contact</li>
-                  <li>Specialization & Unit Preferences</li>
-                  <li>Medical & Surgical History</li>
-                  <li>Educational Qualifications (MBBS, DO, MS/MD)</li>
-                  <li>Document Uploads (LORs, Photo, Payment)</li>
-                </ul>
+              <div className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-semibold flex items-center gap-2"><FileCheck className="h-4 w-4" /> Form Sections (Standard)</p>
+                    <p className="text-xs text-muted-foreground mt-0.5">Enable/disable or rename built-in form sections and fields</p>
+                  </div>
+                  {editSectionsConfig.length === 0 && (
+                    <Button 
+                      size="sm" 
+                      variant="outline" 
+                      className="gap-1.5 h-8 text-blue-600 border-blue-200 hover:bg-blue-50"
+                      onClick={async () => {
+                        try {
+                          const res = await api.get("/application-forms/default-sections");
+                          setEditSectionsConfig(res.data);
+                          toast({ title: "Template loaded" });
+                        } catch (e) {
+                          toast({ title: "Failed to load template", variant: "destructive" });
+                        }
+                      }}
+                    >
+                      <Plus className="h-3.5 w-3.5" /> Load Standard Template
+                    </Button>
+                  )}
+                </div>
+
+                <div className="space-y-3">
+                  {editSectionsConfig.map((section, sIdx) => (
+                    <div key={section.id} className="border rounded-xl p-4 bg-muted/10 space-y-3">
+                      <div className="flex items-center justify-between">
+                        <div className="flex-1 mr-4">
+                          <Input
+                            value={section.title}
+                            onChange={(e) => {
+                              const newCfg = [...editSectionsConfig];
+                              newCfg[sIdx].title = e.target.value;
+                              setEditSectionsConfig(newCfg);
+                            }}
+                            className="h-8 font-bold text-sm bg-transparent border-none focus-visible:ring-0 px-0"
+                          />
+                          <p className="text-[10px] text-muted-foreground uppercase tracking-wider font-bold">Section ID: {section.id}</p>
+                        </div>
+                        <Switch
+                          checked={section.enabled}
+                          onCheckedChange={(v) => {
+                            const newCfg = [...editSectionsConfig];
+                            newCfg[sIdx].enabled = v;
+                            setEditSectionsConfig(newCfg);
+                          }}
+                        />
+                      </div>
+
+                      {section.enabled && (
+                        <div className="space-y-3 mt-2">
+                          <RichTextArea
+                            label="Section Description"
+                            placeholder="Add instructions or details for this section..."
+                            value={section.description || ""}
+                            onChange={(v) => {
+                              const newCfg = [...editSectionsConfig];
+                              newCfg[sIdx].description = v;
+                              setEditSectionsConfig(newCfg);
+                            }}
+                          />
+                        </div>
+                      )}
+
+                      {section.enabled && section.fields && (
+                        <div className="pl-4 border-l-2 border-muted space-y-3 mt-2">
+                          {section.fields.map((field: any, fIdx: number) => (
+                            <div key={field.id} className="flex items-start gap-3 bg-white dark:bg-slate-900 p-2 rounded-lg border shadow-sm group relative">
+                              <div className="flex-1 space-y-1">
+                                <div className="flex items-center justify-between">
+                                  <div className="flex items-center gap-2">
+                                    <Label className="text-[10px] font-bold text-muted-foreground uppercase">Field Label</Label>
+                                    <Badge variant="outline" className="text-[9px] py-0">{field.type}</Badge>
+                                  </div>
+                                  <Button 
+                                    variant="ghost" 
+                                    size="sm" 
+                                    className="h-5 w-5 p-0 opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-red-600 transition-opacity"
+                                    onClick={() => {
+                                      const newCfg = [...editSectionsConfig];
+                                      newCfg[sIdx].fields.splice(fIdx, 1);
+                                      setEditSectionsConfig(newCfg);
+                                    }}
+                                  >
+                                    <Trash2 className="h-3 w-3" />
+                                  </Button>
+                                </div>
+                                <Input
+                                  value={field.label}
+                                  onChange={(e) => {
+                                    const newCfg = [...editSectionsConfig];
+                                    newCfg[sIdx].fields[fIdx].label = e.target.value;
+                                    setEditSectionsConfig(newCfg);
+                                  }}
+                                  className="h-7 text-xs"
+                                />
+                                {field.type === 'info' && (
+                                  <div className="mt-2">
+                                    <RichTextArea
+                                      label="Instruction Content"
+                                      value={field.defaultValue || ""}
+                                      onChange={(v) => {
+                                        const newCfg = [...editSectionsConfig];
+                                        newCfg[sIdx].fields[fIdx].defaultValue = v;
+                                        setEditSectionsConfig(newCfg);
+                                      }}
+                                    />
+                                  </div>
+                                )}
+                                {field.options && (
+                                  <div className="mt-1">
+                                    <Label className="text-[9px] text-muted-foreground">Options (comma separated)</Label>
+                                    <Input
+                                      value={field.options.join(", ")}
+                                      onChange={(e) => {
+                                        const newCfg = [...editSectionsConfig];
+                                        newCfg[sIdx].fields[fIdx].options = e.target.value.split(",").map((o: string) => o.trim()).filter(Boolean);
+                                        setEditSectionsConfig(newCfg);
+                                      }}
+                                      className="h-7 text-[10px]"
+                                    />
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          ))}
+                          <Button 
+                            variant="ghost" 
+                            size="sm" 
+                            className="w-full h-8 border-dashed border-2 text-[10px] uppercase tracking-wider font-bold gap-2"
+                            onClick={() => {
+                              const newCfg = [...editSectionsConfig];
+                              newCfg[sIdx].fields.push({
+                                id: `field_${Date.now()}`,
+                                type: "text",
+                                label: "New Field",
+                                required: false
+                              });
+                              setEditSectionsConfig(newCfg);
+                            }}
+                          >
+                            <Plus className="h-3 w-3" /> Add Field to Section
+                          </Button>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
               </div>
 
               <Separator />
@@ -1279,6 +1521,7 @@ export default function ApplicationFormsPage() {
                 description: editForm.description ?? undefined,
                 deadline: editForm.deadline ?? undefined,
                 customFields: editCustomFields,
+                sectionsConfig: editSectionsConfig,
               })}
             >
               {updateFormMutation.isPending ? "Saving…" : "Save Changes"}

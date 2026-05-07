@@ -1,8 +1,8 @@
 import app from "./app";
 import { logger } from "./lib/logger";
-import { db, usersTable } from "@workspace/db";
-import { eq } from "drizzle-orm";
-import { sql } from "drizzle-orm";
+import { db, usersTable, applicationFormsTable, programsTable } from "@workspace/db";
+import { eq, sql, ilike } from "drizzle-orm";
+import { DEFAULT_SECTIONS } from "./lib/default-sections";
 
 const rawPort = process.env["PORT"];
 
@@ -22,6 +22,7 @@ if (Number.isNaN(port) || port <= 0) {
 const SARAVANAN_PASSWORD_HASH = "$2b$10$tzKB/Dj.bn.MPCUj5GJQz.V6.ijFrypzqkwSjMW458ni7dCAx0MuS";
 
 async function runStartupFixes() {
+
   // Migration: add new columns if they don't exist
   await db.execute(sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS designation TEXT`);
   await db.execute(sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS gender TEXT`);
@@ -155,19 +156,10 @@ async function runStartupFixes() {
     logger.info("Corrected super admin password hash for saravanan@sankaraeye.com");
   }
 
-  // Migration: add sections_config to application_forms
-  await db.execute(sql`ALTER TABLE application_forms ADD COLUMN IF NOT EXISTS sections_config JSONB DEFAULT '[]'::jsonb`);
+async function runStartupFixes() {
+  logger.info("Running startup fixes...");
 
-  const DEFAULT_SECTIONS = [
-    {
-      id: "instructions",
-      title: "Key Instructions",
-      description: "Please read the following instructions carefully before proceeding.",
-      enabled: true,
-      fields: [
-        { id: "intro_text", type: "info", label: "Instructions", defaultValue: "1. Candidates can now apply for multiple Sub-specialties in a single application form.\n2. Kindly carry your basic and post-graduate educational certificates, current valid medical registration license and passport - size photograph\n3. Selection process for the fellowship involves a written test (MCQ pattern) and an interview\n4. Application fee of Rs.2750/- can be paid only through online transfer...\n5. The age limit of the applicant to apply for the fellowships is 35 years..." }
-      ]
-    },
+
     {
       id: "subspecialty",
       title: "Subspecialty Selection",
@@ -183,14 +175,14 @@ async function runStartupFixes() {
       description: "Choose the preferred center for each fellowship.",
       enabled: true,
       fields: [
-        { id: "unit_cornea", type: "select", label: "Cornea Preferred Center", options: ["Bangalore", "Coimbatore", "Guntur", "Jaipur", "Shimoga", "Not Applicable"], visibleIf: { field: "specialization", contains: "Cornea" } },
-        { id: "unit_glaucoma", type: "select", label: "Glaucoma Preferred Center", options: ["Bangalore", "Coimbatore", "Guntur", "Shimoga", "Not Applicable"], visibleIf: { field: "specialization", contains: "Glaucoma" } },
-        { id: "unit_iol", type: "select", label: "IOL Preferred Center", options: ["Anand", "Bangalore", "Guntur", "Hyderabad", "Indore", "Jaipur", "Kanpur", "Krishnankoil", "Ludhiana", "Panvel", "Shimoga", "Varanasi", "Not Applicable"], visibleIf: { field: "specialization", contains: "IOL" } },
-        { id: "unit_medical_retina", type: "select", label: "Medical Retina Preferred Center", options: ["Bangalore", "Coimbatore", "Guntur", "Jaipur", "Shimoga", "Not Applicable"], visibleIf: { field: "specialization", contains: "Medical Retina" } },
-        { id: "unit_oculoplasty", type: "select", label: "Oculoplasty Preferred Center", options: ["Bangalore", "Coimbatore", "Guntur", "Not Applicable"], visibleIf: { field: "specialization", contains: "Oculoplasty" } },
-        { id: "unit_pediatric", type: "select", label: "Pediatric Preferred Center", options: ["Bangalore", "Coimbatore", "Guntur", "Shimoga", "Not Applicable"], visibleIf: { field: "specialization", contains: "Pediatric Ophthalmology" } },
-        { id: "unit_phaco", type: "select", label: "Phaco Refractive Preferred Center", options: ["Bangalore", "Not Applicable"], visibleIf: { field: "specialization", contains: "Phaco Refractive" } },
-        { id: "unit_vitreo_retina", type: "select", label: "Vitreo Retina Preferred Center", options: ["Bangalore", "Coimbatore", "Guntur", "Shimoga", "Not Applicable"], visibleIf: { field: "specialization", contains: "Vitreo Retina" } },
+        { id: "unit_cornea", type: "checkbox_group", label: "Cornea Preferred Center", options: ["Bangalore", "Coimbatore", "Guntur", "Jaipur", "Shimoga", "Not Applicable"], visibleIf: { field: "specialization", contains: "Cornea" } },
+        { id: "unit_glaucoma", type: "checkbox_group", label: "Glaucoma Preferred Center", options: ["Bangalore", "Coimbatore", "Guntur", "Shimoga", "Not Applicable"], visibleIf: { field: "specialization", contains: "Glaucoma" } },
+        { id: "unit_iol", type: "checkbox_group", label: "IOL Preferred Center", options: ["Anand", "Bangalore", "Guntur", "Hyderabad", "Indore", "Jaipur", "Kanpur", "Krishnankoil", "Ludhiana", "Panvel", "Shimoga", "Varanasi", "Not Applicable"], visibleIf: { field: "specialization", contains: "IOL" } },
+        { id: "unit_medical_retina", type: "checkbox_group", label: "Medical Retina Preferred Center", options: ["Bangalore", "Coimbatore", "Guntur", "Jaipur", "Shimoga", "Not Applicable"], visibleIf: { field: "specialization", contains: "Medical Retina" } },
+        { id: "unit_oculoplasty", type: "checkbox_group", label: "Oculoplasty Preferred Center", options: ["Bangalore", "Coimbatore", "Guntur", "Not Applicable"], visibleIf: { field: "specialization", contains: "Oculoplasty" } },
+        { id: "unit_pediatric", type: "checkbox_group", label: "Pediatric Preferred Center", options: ["Bangalore", "Coimbatore", "Guntur", "Shimoga", "Not Applicable"], visibleIf: { field: "specialization", contains: "Pediatric Ophthalmology" } },
+        { id: "unit_phaco", type: "checkbox_group", label: "Phaco Refractive Preferred Center", options: ["Bangalore", "Not Applicable"], visibleIf: { field: "specialization", contains: "Phaco Refractive" } },
+        { id: "unit_vitreo_retina", type: "checkbox_group", label: "Vitreo Retina Preferred Center", options: ["Bangalore", "Coimbatore", "Guntur", "Shimoga", "Not Applicable"], visibleIf: { field: "specialization", contains: "Vitreo Retina" } },
         { id: "referralSource", type: "select", label: "Where did you hear about this Fellowship?", required: true, options: ["Sankara Website", "Word of Mouth", "Referred by any Faculty or exiting trainee at Sankara", "IJO Advertisement", "Social Media Platforms (Instagram/Facebook/Whatsapp/LinkedIn)"], isStandard: true, mapping: "referralSource" }
       ]
     },
@@ -315,12 +307,29 @@ async function runStartupFixes() {
   const DEFAULT_SECTIONS_JSON = JSON.stringify(DEFAULT_SECTIONS);
 
   // Aggressively update the July 2026 fellowship form to use the latest multi-specialty config
-  await db.execute(sql`
-    UPDATE application_forms 
-    SET sections_config = ${DEFAULT_SECTIONS_JSON}::jsonb
-    WHERE title LIKE '%July 2026%' OR sections_config IS NULL OR sections_config = '[]'::jsonb
-  `);
-  logger.info("Synchronized fellowship form configurations with multi-specialty support");
+  const [targetForm] = await db.select().from(applicationFormsTable).where(ilike(applicationFormsTable.title, "%July 2026%"));
+  
+  if (targetForm) {
+    await db.update(applicationFormsTable)
+      .set({ sectionsConfig: DEFAULT_SECTIONS as any })
+      .where(eq(applicationFormsTable.id, targetForm.id));
+    logger.info("Updated existing July 2026 fellowship form configuration");
+  } else {
+    // Create it if it doesn't exist
+    const [prog] = await db.select().from(programsTable).where(ilike(programsTable.name, "%July 2026%"));
+    if (prog) {
+      await db.insert(applicationFormsTable).values({
+        programId: prog.id,
+        title: "Fellowship Program - July 2026",
+        description: "Sankara Academy of Vision Fellowship Program for July 2026 batch.",
+        isActive: true,
+        token: Math.random().toString(36).substring(2, 10).toUpperCase(),
+        sectionsConfig: DEFAULT_SECTIONS as any,
+        programName: prog.name,
+      });
+      logger.info("Created new July 2026 fellowship form with standard sections");
+    }
+  }
 }
 
 app.listen(port, (err) => {
