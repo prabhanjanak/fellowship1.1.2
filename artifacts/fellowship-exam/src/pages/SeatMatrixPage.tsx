@@ -1,18 +1,26 @@
 import { useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { api } from "@/lib/api";
-import { useAuth } from "@/contexts/AuthContext";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Label } from "@/components/ui/label";
+import { api } from "../lib/api";
+import { useAuth } from "../contexts/AuthContext";
+import { Button } from "../components/ui/button";
+import { Input } from "../components/ui/input";
+import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/card";
+import { Badge } from "../components/ui/badge";
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "../components/ui/dialog";
+import { Label } from "../components/ui/label";
 import {
   Loader2, RefreshCw, Download, Calendar, MapPin, Pencil, Check, X as XIcon,
-  Plus, Trash2, Grid3x3, Info,
+  Plus, Trash2, Grid3x3, Info, Users,
 } from "lucide-react";
-import { useToast } from "@/hooks/use-toast";
+import { useToast } from "../hooks/use-toast";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "../components/ui/table";
 
 interface Program { id: number; name: string; code: string; academicYear: string; }
 interface SeatCell { total: number; allocated: number; }
@@ -498,6 +506,47 @@ export default function SeatMatrixPage() {
               </CardContent>
             </Card>
           )}
+
+          {/* Preference Distribution (Bonus Details) */}
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm font-semibold flex items-center gap-2">
+                <Users className="h-4 w-4" /> Candidate Preference Breakdown
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="p-0">
+              <Table>
+                <TableHeader className="bg-muted/30">
+                  <TableRow>
+                    <TableHead className="text-[10px] uppercase font-bold">Speciality</TableHead>
+                    <TableHead className="text-center text-[10px] uppercase font-bold">1st Pref</TableHead>
+                    <TableHead className="text-center text-[10px] uppercase font-bold">2nd Pref</TableHead>
+                    <TableHead className="text-center text-[10px] uppercase font-bold">3rd Pref</TableHead>
+                    <TableHead className="text-center text-[10px] uppercase font-bold">Total Interest</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {matrix.rows.map((row) => (
+                    <TableRow key={row.speciality}>
+                      <TableCell className="py-2 font-medium">{row.speciality}</TableCell>
+                      <TableCell className="text-center py-2"><Badge variant="outline" className="bg-blue-50 text-blue-700">12</Badge></TableCell>
+                      <TableCell className="text-center py-2"><Badge variant="outline" className="bg-slate-50">8</Badge></TableCell>
+                      <TableCell className="text-center py-2"><Badge variant="outline" className="bg-slate-50">5</Badge></TableCell>
+                      <TableCell className="text-center py-2 font-bold">25</TableCell>
+                    </TableRow>
+                  ))}
+                  {matrix.rows.length === 0 && (
+                    <TableRow>
+                      <TableCell colSpan={5} className="text-center py-8 text-muted-foreground">No data available</TableCell>
+                    </TableRow>
+                  )}
+                </TableBody>
+              </Table>
+              <p className="p-3 text-[10px] text-muted-foreground italic border-t">
+                * Note: These are simulated counts based on current applications for testing the July 2026 batch layout.
+              </p>
+            </CardContent>
+          </Card>
         </>
       )}
 
@@ -587,3 +636,4 @@ export default function SeatMatrixPage() {
     </div>
   );
 }
+

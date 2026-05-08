@@ -1,24 +1,24 @@
 import { useState, useEffect, useRef } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { api } from "@/lib/api";
-import { useAuth } from "@/contexts/AuthContext";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
-import { Checkbox } from "@/components/ui/checkbox";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Switch } from "@/components/ui/switch";
-import { Separator } from "@/components/ui/separator";
+import { api } from "../lib/api";
+import { useAuth } from "../contexts/AuthContext";
+import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/card";
+import { Badge } from "../components/ui/badge";
+import { Button } from "../components/ui/button";
+import { Input } from "../components/ui/input";
+import { Label } from "../components/ui/label";
+import { Textarea } from "../components/ui/textarea";
+import { Checkbox } from "../components/ui/checkbox";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "../components/ui/dialog";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../components/ui/select";
+import { Switch } from "../components/ui/switch";
+import { Separator } from "../components/ui/separator";
 import {
   Plus, Link2, Copy, Check, Eye, Users, Clock, ChevronRight, ArrowLeft, ExternalLink,
   FileCheck, FileX, Loader2, Trash2, Download, CreditCard, GripVertical, Settings2, X as XIcon,
   RefreshCw, CheckCheck, Ban, FileText, ImageIcon, ChevronDown, ChevronUp,
 } from "lucide-react";
-import { useToast } from "@/hooks/use-toast";
+import { useToast } from "../hooks/use-toast";
 
 interface CustomField {
   id: string;
@@ -820,8 +820,8 @@ export default function ApplicationFormsPage() {
                               {Object.entries(exp).map(([proc, vals]: [string, any]) => (
                                 <tr key={proc}>
                                   <td className="p-2 border font-medium">{proc}</td>
-                                  <td className="p-2 border text-center">{vals.underSupervision}</td>
-                                  <td className="p-2 border text-center">{vals.independently}</td>
+                                  <td className="p-2 border text-center">{vals.supervision ?? 0}</td>
+                                  <td className="p-2 border text-center">{vals.independent ?? 0}</td>
                                 </tr>
                               ))}
                             </tbody>
@@ -1664,3 +1664,4 @@ export default function ApplicationFormsPage() {
     </div>
   );
 }
+

@@ -93,4 +93,10 @@ router.get("/programs/:programId", requireAuth, async (req, res) => {
   });
 });
 
+router.delete("/programs/:programId", requireAuth, requireRole("super_admin", "program_admin"), async (req, res) => {
+  const programId = Number(req.params["programId"]);
+  await db.delete(programsTable).where(eq(programsTable.id, programId));
+  res.json({ success: true });
+});
+
 export default router;

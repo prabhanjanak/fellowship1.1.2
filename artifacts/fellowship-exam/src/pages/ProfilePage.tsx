@@ -1,17 +1,17 @@
 import { useState } from "react";
-import { useAuth } from "@/contexts/AuthContext";
+import { useAuth } from "../contexts/AuthContext";
 import { useQuery } from "@tanstack/react-query";
-import { api } from "@/lib/api";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { api } from "../lib/api";
+import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/card";
+import { Badge } from "../components/ui/badge";
+import { Button } from "../components/ui/button";
+import { Input } from "../components/ui/input";
+import { Label } from "../components/ui/label";
+import { Alert, AlertDescription } from "../components/ui/alert";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "../components/ui/dialog";
 import { KeyRound, Eye, EyeOff, CheckCircle2, Building2, BadgeCheck, Briefcase } from "lucide-react";
-import { useToast } from "@/hooks/use-toast";
-import { RoleAvatar } from "@/components/RoleAvatar";
+import { useToast } from "../hooks/use-toast";
+import { RoleAvatar } from "../components/RoleAvatar";
 
 interface CandidateProfile {
   id: number; candidateCode: string; fullName: string; email: string;
@@ -275,3 +275,4 @@ export default function ProfilePage() {
     </div>
   );
 }
+

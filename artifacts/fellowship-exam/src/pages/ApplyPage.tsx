@@ -1,10 +1,10 @@
 import { useState, useEffect, useCallback } from "react";
-import logoUrl from "@assets/seh_sav_logo_1777703794142.jpg";
+import logoUrl from "../assets/seh_sav_logo_1777703794142.jpg";
 import { Loader2, AlertCircle, CheckCircle2, ChevronRight, ChevronLeft, ChevronDown, CreditCard } from "lucide-react";
-import { Card, CardContent } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { Label } from "@/components/ui/label";
+import { Card, CardContent } from "../components/ui/card";
+import { Button } from "../components/ui/button";
+import { Badge } from "../components/ui/badge";
+import { Label } from "../components/ui/label";
 
 // Ensure Razorpay type exists
 declare global {
@@ -1095,3 +1095,4 @@ export default function ApplyPage({ token }: { token: string }) {
     </div>
   );
 }
+

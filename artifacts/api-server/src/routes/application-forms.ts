@@ -753,9 +753,12 @@ router.post(
       const headers = rows[0].map((h: string) => h.trim());
       const dataRows = rows.slice(1);
 
+      // Collect all current row IDs from the spreadsheet to handle deletions
+      const spreadsheetRowIds = new Set<string>();
+
       // Get existing row IDs/timestamps to avoid duplicates
       const existingResult = await db.execute(sql`
-        SELECT google_sheets_row_id FROM application_submissions
+        SELECT google_sheets_row_id, email FROM application_submissions
         WHERE form_id = ${id} AND google_sheets_row_id IS NOT NULL
       `);
       const existingIds = new Set((existingResult.rows as { google_sheets_row_id: string }[]).map(r => r.google_sheets_row_id));
@@ -772,6 +775,7 @@ router.post(
         const timestamp = rowData["Timestamp"];
         const email = rowData["E-mail (this would be the ID all communication would be shared on)"] || rowData["E-mail"] || rowData["Email"];
         const rowId = `${timestamp}_${email}`.toLowerCase().replace(/\s+/g, "");
+        spreadsheetRowIds.add(rowId);
 
         if (existingIds.has(rowId)) continue;
 
@@ -804,14 +808,14 @@ router.post(
         });
 
         // Surgical experience mapping
-        const surgicalExperience: Record<string, { underSupervision: string; independently: string }> = {};
+        const surgicalExperience: Record<string, { supervision: string; independent: string }> = {};
         const surgicalCategories = ["ECCE", "SICS", "PHACO", "TRABECULECTOMY", "RETINA LASERS", "DCR"];
         surgicalCategories.forEach(cat => {
           const supKey = headers.find(h => h.includes(`Approximate No of ${cat}`) && h.includes("(Under Supervision)"));
           const indKey = headers.find(h => h.includes(`Approximate No of ${cat}`) && h.includes("(Independently)"));
           surgicalExperience[cat] = {
-            underSupervision: supKey ? rowData[supKey] : "0",
-            independently: indKey ? rowData[indKey] : "0"
+            supervision: supKey ? rowData[supKey] : "0",
+            independent: indKey ? rowData[indKey] : "0"
           };
         });
 
@@ -872,7 +876,36 @@ router.post(
         imported++;
       }
 
-      res.json({ success: true, imported, total: dataRows.length });
+      // Handle deletions: if a row is gone from the spreadsheet, remove it from our DB
+      let deletedCount = 0;
+      const idsToDelete: string[] = [];
+      const emailsToDelete: string[] = [];
+
+      for (const rowId of existingIds) {
+        if (!spreadsheetRowIds.has(rowId)) {
+          const [sub] = await db.select().from(applicationSubmissionsTable).where(eq(applicationSubmissionsTable.googleSheetsRowId, rowId));
+          if (sub) {
+            idsToDelete.push(rowId);
+            emailsToDelete.push(sub.email);
+          }
+        }
+      }
+
+      if (idsToDelete.length > 0) {
+        // Delete candidates first if they exist (linked by email)
+        for (const email of emailsToDelete) {
+          await db.delete(candidatesTable).where(eq(candidatesTable.email, email));
+        }
+        // Delete submissions
+        await db.delete(applicationSubmissionsTable)
+          .where(and(
+            eq(applicationSubmissionsTable.formId, id),
+            inArray(applicationSubmissionsTable.googleSheetsRowId, idsToDelete)
+          ));
+        deletedCount = idsToDelete.length;
+      }
+
+      res.json({ success: true, imported, deleted: deletedCount, total: dataRows.length });
     } catch (e: unknown) {
       console.error("[google-sheets-sync] error:", e);
       const msg = e instanceof Error ? e.message : "Unknown error";

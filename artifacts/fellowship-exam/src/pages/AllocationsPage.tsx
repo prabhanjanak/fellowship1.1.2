@@ -1,273 +1,296 @@
-import { useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { api } from "@/lib/api";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { Award, Zap, Download, BarChart3 } from "lucide-react";
-import { useToast } from "@/hooks/use-toast";
-
-interface Program { id: number; name: string; }
-interface Allocation {
-  id: number;
-  candidateId: number;
-  candidateCode: string;
-  candidateName: string;
-  programId: number;
-  specialityName: string | null;
-  unitName: string | null;
-  status: string;
-  rank: number | null;
-  totalScore: number | null;
-}
-
-interface SeatMatrixRow {
-  speciality: string;
-  seats: Record<string, { total: number; allocated: number }>;
-  total: number;
-  totalAllocated: number;
-}
-
-interface SeatMatrix { rows: SeatMatrixRow[]; units: string[]; }
-
-const statusColors: Record<string, string> = {
-  SELECTED: "bg-green-100 text-green-800",
-  WAITLISTED: "bg-yellow-100 text-yellow-800",
-  REJECTED: "bg-red-100 text-red-800",
-};
+import { api } from "../lib/api";
+import { useState } from "react";
+import {
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+  CardDescription,
+} from "../components/ui/card";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "../components/ui/table";
+import { Button } from "../components/ui/button";
+import { Badge } from "../components/ui/badge";
+import {
+  Loader2,
+  Download,
+  CheckCircle2,
+  UserCheck,
+  Trophy,
+  Filter,
+  BarChart3,
+} from "lucide-react";
+import { useToast } from "../hooks/use-toast";
+import * as XLSX from 'xlsx';
 
 export default function AllocationsPage() {
   const { toast } = useToast();
-  const qc = useQueryClient();
-  const [selectedProgram, setSelectedProgram] = useState<string>("");
+  const queryClient = useQueryClient();
+  const [filterSpec, setFilterSpec] = useState<string | null>(null);
 
-  const { data: programs = [] } = useQuery<Program[]>({
-    queryKey: ["programs"],
-    queryFn: () => api.get<Program[]>("/programs"),
+  const { data: candidates = [], isLoading: isLoadingCandidates } = useQuery({
+    queryKey: ["candidates"],
+    queryFn: () => api.get<any[]>("/candidates"),
   });
 
-  // Auto-select first program
-  useEffect(() => {
-    if (programs.length > 0 && !selectedProgram) {
-      setSelectedProgram(String(programs[0]!.id));
+  const { data: matrixData, isLoading: isLoadingMatrix } = useQuery({
+    queryKey: ["seat-matrix"],
+    queryFn: () => api.get<any>("/seat-matrix"),
+  });
+
+  const isLoading = isLoadingCandidates || isLoadingMatrix;
+
+  // Extract specializations and seat counts from matrixData
+  const SPECIALIZATIONS = matrixData?.rows?.map((r: any) => r.speciality) || [];
+  const SEAT_MATRIX: Record<string, number> = {};
+  matrixData?.rows?.forEach((r: any) => {
+    SEAT_MATRIX[r.speciality] = r.total;
+  });
+
+  // Calculate scores and sort
+  const scoredCandidates = candidates
+    .map((c: any) => {
+      // Use actual interview average if available, otherwise fallback to 0
+      const interviewAvg = c.interviewScore || 0;
+      
+      return {
+        ...c,
+        totalScore: (c.mcqScore || 0) + (c.psychometricScore || 0) + interviewAvg,
+        interviewAvg,
+        // Use actual preferences from the candidate object
+        preferences: c.specializations || []
+      };
+    })
+    .sort((a: any, b: any) => (b.totalScore || 0) - (a.totalScore || 0));
+
+  const allocationMutation = useMutation({
+    mutationFn: ({ id, specialization }: { id: number, specialization: string }) => 
+      api.patch(`/candidates/${id}`, { status: 'allocated', reviewNotes: `Allocated to ${specialization}` }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["candidates"] });
+      queryClient.invalidateQueries({ queryKey: ["seat-matrix"] });
+      toast({ title: "Allocation Successful", description: "Candidate has been assigned to the specialization." });
     }
-  }, [programs, selectedProgram]);
-
-  const { data: allocations = [], isLoading } = useQuery<Allocation[]>({
-    queryKey: ["allocations", selectedProgram],
-    queryFn: () => api.get<Allocation[]>(`/allocations${selectedProgram ? `?programId=${selectedProgram}` : ""}`),
-    enabled: !!selectedProgram,
   });
 
-  const { data: matrix } = useQuery<SeatMatrix>({
-    queryKey: ["seat-matrix", selectedProgram ? Number(selectedProgram) : null],
-    queryFn: () => api.get<SeatMatrix>(`/seat-matrix?programId=${selectedProgram}`),
-    enabled: !!selectedProgram,
-  });
-
-  const runAllocation = useMutation({
-    mutationFn: (programId: number) => api.post<{ allocated: number }>(`/allocations/run`, { programId }),
-    onSuccess: (data) => {
-      toast({ title: `Allocation complete — ${data.allocated} candidates allocated` });
-      qc.invalidateQueries({ queryKey: ["allocations"] });
+  const autoAllocateMutation = useMutation({
+    mutationFn: async (plan: { id: number, specialization: string }[]) => {
+      for (const item of plan) {
+        await api.patch(`/candidates/${item.id}`, { status: 'allocated', reviewNotes: `Allocated to ${item.specialization}` });
+      }
     },
-    onError: (e: Error) => toast({ title: "Error", description: e.message, variant: "destructive" }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["candidates"] });
+      queryClient.invalidateQueries({ queryKey: ["seat-matrix"] });
+      toast({ title: "Auto-Allocation Complete", description: "Candidates have been assigned based on merit and preferences." });
+    }
   });
 
-  const downloadLetter = async (allocationId: number) => {
-    try {
-      const token = localStorage.getItem("fellowship_token");
-      const res = await fetch(`${import.meta.env.BASE_URL.replace(/\/$/, "")}/api/allocations/${allocationId}/letter`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      if (!res.ok) throw new Error("Failed");
-      const blob = await res.blob();
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url; a.download = `allocation-letter-${allocationId}.pdf`; a.click();
-    } catch {
-      toast({ title: "Error downloading letter", variant: "destructive" });
+  const handleAutoAllocate = () => {
+    const plan: { id: number, specialization: string }[] = [];
+    const tempOccupancy = { ...occupancy };
+    
+    scoredCandidates.forEach((c: any) => {
+      if (c.status === 'allocated') return;
+      
+      for (const pref of c.preferences) {
+        if ((tempOccupancy[pref] || 0) < (SEAT_MATRIX[pref] || 0)) {
+          plan.push({ id: c.id, specialization: pref });
+          tempOccupancy[pref] = (tempOccupancy[pref] || 0) + 1;
+          break;
+        }
+      }
+    });
+
+    if (plan.length === 0) {
+      toast({ title: "Nothing to allocate", description: "All candidates are either allocated or no seats match their preferences." });
+      return;
+    }
+
+    if (confirm(`This will automatically allocate ${plan.length} candidates based on merit. Proceed?`)) {
+      autoAllocateMutation.mutate(plan);
     }
   };
 
-  const selectedProgramName = programs.find((p) => String(p.id) === selectedProgram)?.name ?? "";
+  const exportToExcel = () => {
+    const data = scoredCandidates.map((c: any, index: number) => ({
+      Rank: index + 1,
+      "Candidate Code": c.candidateCode,
+      Name: c.fullName,
+      "MCQ Score": c.mcqScore || 0,
+      "Psych Score": c.psychometricScore || 0,
+      "Interview Score": c.interviewAvg.toFixed(2),
+      "Total Score": c.totalScore.toFixed(2),
+      "Preferences": c.preferences.join(", "),
+      "Current Status": c.status,
+      "Allocated Specialization": c.status === 'allocated' ? c.reviewNotes?.replace('Allocated to ', '') : 'Pending'
+    }));
 
-  // Seat summary from matrix
-  const totalSeats = matrix?.rows.reduce((s, r) => s + r.total, 0) ?? 0;
-  const totalAllocated = matrix?.rows.reduce((s, r) => s + r.totalAllocated, 0) ?? 0;
-  const totalRemaining = totalSeats - totalAllocated;
+    const worksheet = XLSX.utils.json_to_sheet(data);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, "Allocations");
+    XLSX.writeFile(workbook, `Fellowship_Allocations_JUL_2026.xlsx`);
+  };
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center min-h-[400px]">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
+    );
+  }
+
+  // Calculate current occupancy from the matrixData
+  const occupancy: Record<string, number> = {};
+  matrixData?.rows?.forEach((r: any) => {
+    occupancy[r.speciality] = r.totalAllocated || 0;
+  });
 
   return (
     <div className="p-6 space-y-6">
-      <div className="flex items-center justify-between flex-wrap gap-3">
+      <div className="flex justify-between items-end">
         <div>
-          <h1 className="text-2xl font-bold flex items-center gap-2"><Award className="h-6 w-6" /> Allocations</h1>
-          <p className="text-muted-foreground text-sm mt-1">Fellowship seat allocations</p>
+          <h1 className="text-3xl font-bold tracking-tight">Merit-Based Allocation</h1>
+          <p className="text-muted-foreground">JULY 2026 Batch — Final Seat Assignment Dashboard</p>
         </div>
-        {selectedProgram && (
-          <Button
-            className="gap-2" variant="outline"
-            onClick={() => runAllocation.mutate(Number(selectedProgram))}
-            disabled={runAllocation.isPending}
-          >
-            <Zap className="h-4 w-4" />
-            {runAllocation.isPending ? "Running…" : "Run Allocation"}
+        <div className="flex gap-3">
+          <Button onClick={handleAutoAllocate} variant="default" className="gap-2 bg-primary hover:bg-primary/90" disabled={autoAllocateMutation.isPending}>
+            {autoAllocateMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trophy className="h-4 w-4" />}
+            Smart Auto-Allocate
           </Button>
-        )}
+          <Button onClick={exportToExcel} variant="outline" className="gap-2 border-emerald-200 text-emerald-700 bg-emerald-50 hover:bg-emerald-100">
+            <Download className="h-4 w-4" /> Export to Excel
+          </Button>
+        </div>
       </div>
 
-      {/* Program tabs */}
-      {programs.length > 1 && (
-        <div className="flex gap-1.5 flex-wrap border-b pb-3">
-          {programs.map((p) => (
-            <button
-              key={p.id}
-              onClick={() => setSelectedProgram(String(p.id))}
-              className={`px-4 py-1.5 rounded-full text-sm font-medium transition-colors ${
-                selectedProgram === String(p.id)
-                  ? "bg-primary text-primary-foreground"
-                  : "bg-muted text-muted-foreground hover:bg-muted/80"
-              }`}
-            >
-              {p.name}
-            </button>
-          ))}
-        </div>
-      )}
-
-      {/* Seat availability summary */}
-      {matrix && totalSeats > 0 && (
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-          {[
-            { label: "Total Seats", value: totalSeats, cls: "bg-blue-50 dark:bg-blue-950/30 text-blue-700 dark:text-blue-300" },
-            { label: "Allocated", value: totalAllocated, cls: "bg-amber-50 dark:bg-amber-950/30 text-amber-700 dark:text-amber-300" },
-            { label: "Remaining", value: totalRemaining, cls: "bg-emerald-50 dark:bg-emerald-950/30 text-emerald-700 dark:text-emerald-300" },
-            { label: "Allocations Run", value: allocations.length, cls: "bg-purple-50 dark:bg-purple-950/30 text-purple-700 dark:text-purple-300" },
-          ].map(({ label, value, cls }) => (
-            <Card key={label} className={`border-0 ${cls}`}>
-              <CardContent className="py-3 px-4">
-                <p className="text-xs font-medium opacity-75">{label}</p>
-                <p className="text-2xl font-bold">{value}</p>
-              </CardContent>
-            </Card>
-          ))}
-        </div>
-      )}
-
-      {/* Seat matrix by speciality */}
-      {matrix && matrix.rows.length > 0 && (
-        <Card>
-          <CardHeader className="pb-2">
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+        {/* Seat Matrix Sidebar */}
+        <Card className="md:col-span-1 shadow-sm">
+          <CardHeader className="bg-slate-50 border-b">
             <CardTitle className="text-sm flex items-center gap-2">
-              <BarChart3 className="h-4 w-4" /> Seat Availability — {selectedProgramName}
+              <BarChart3 className="h-4 w-4 text-primary" /> Seat Matrix
             </CardTitle>
           </CardHeader>
-          <CardContent className="p-0">
-            <div className="overflow-x-auto">
-              <table className="w-full text-xs">
-                <thead className="border-b bg-muted/40">
-                  <tr>
-                    <th className="text-left px-4 py-2.5 font-medium text-muted-foreground">Speciality</th>
-                    {matrix.units.map((u) => (
-                      <th key={u} className="px-3 py-2.5 font-medium text-muted-foreground text-center">{u}</th>
-                    ))}
-                    <th className="px-3 py-2.5 font-medium text-muted-foreground text-center">Total</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {matrix.rows.map((row, ri) => (
-                    <tr key={row.speciality} className={`border-b last:border-0 ${ri % 2 === 0 ? "bg-background" : "bg-muted/20"}`}>
-                      <td className="px-4 py-2 font-medium">{row.speciality}</td>
-                      {matrix.units.map((u) => {
-                        const cell = row.seats[u] ?? { total: 0, allocated: 0 };
-                        const pct = cell.total > 0 ? cell.allocated / cell.total : 0;
-                        const color = pct >= 1 ? "text-red-600" : pct > 0.5 ? "text-amber-600" : "text-emerald-600";
-                        return (
-                          <td key={u} className="px-3 py-2 text-center">
-                            {cell.total > 0 ? (
-                              <span className={`font-mono font-semibold ${color}`}>{cell.allocated}/{cell.total}</span>
-                            ) : (
-                              <span className="text-muted-foreground/40">—</span>
-                            )}
-                          </td>
-                        );
-                      })}
-                      <td className="px-3 py-2 text-center font-bold text-primary">
-                        {row.totalAllocated}/{row.total}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+          <CardContent className="p-4 space-y-4">
+            {SPECIALIZATIONS.map(spec => {
+              const total = SEAT_MATRIX[spec] || 0;
+              const filled = occupancy[spec] || 0;
+              const percent = (filled / total) * 100;
+              
+              return (
+                <div key={spec} className="space-y-1">
+                  <div className="flex justify-between text-[11px] font-medium">
+                    <span className="truncate max-w-[150px]">{spec}</span>
+                    <span>{filled} / {total}</span>
+                  </div>
+                  <div className="w-full h-1.5 bg-slate-100 rounded-full overflow-hidden">
+                    <div 
+                      className={`h-full transition-all ${percent >= 100 ? 'bg-rose-500' : percent > 70 ? 'bg-amber-500' : 'bg-emerald-500'}`}
+                      style={{ width: `${Math.min(percent, 100)}%` }}
+                    />
+                  </div>
+                </div>
+              );
+            })}
+            <div className="pt-2 border-t mt-4 flex justify-between items-center text-xs font-bold text-slate-600">
+              <span>TOTAL SEATS</span>
+              <span>{Object.values(occupancy).reduce((a,b)=>a+b, 0)} / {Object.values(SEAT_MATRIX).reduce((a,b)=>a+b, 0)}</span>
             </div>
           </CardContent>
         </Card>
-      )}
 
-      {/* Allocations table */}
-      {!selectedProgram ? (
-        <div className="text-center py-12">
-          <Award className="h-12 w-12 mx-auto text-muted-foreground/40 mb-3" />
-          <p className="text-muted-foreground">No programs found</p>
-        </div>
-      ) : isLoading ? (
-        <div className="text-center py-12 text-muted-foreground">Loading…</div>
-      ) : allocations.length === 0 ? (
-        <Card>
-          <CardContent className="py-12 text-center">
-            <p className="text-muted-foreground mb-4">No allocations yet for {selectedProgramName}</p>
-            <Button onClick={() => runAllocation.mutate(Number(selectedProgram))} disabled={runAllocation.isPending} className="gap-2">
-              <Zap className="h-4 w-4" />
-              {runAllocation.isPending ? "Running…" : "Run Allocation Now"}
-            </Button>
-          </CardContent>
-        </Card>
-      ) : (
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">{allocations.length} allocations — {selectedProgramName}</CardTitle>
+        {/* Merit List */}
+        <Card className="md:col-span-3 shadow-sm overflow-hidden">
+          <CardHeader className="flex flex-row items-center justify-between border-b py-3 bg-white">
+            <CardTitle className="text-lg">Merit Merit List (Ranked by Total Score)</CardTitle>
+            <div className="flex gap-2">
+               <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-100 px-2 py-0.5">MCQ + Psych + Interview</Badge>
+            </div>
           </CardHeader>
           <CardContent className="p-0">
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead className="border-b bg-muted/40">
-                  <tr>
-                    <th className="text-left px-4 py-3 font-medium text-muted-foreground">Rank</th>
-                    <th className="text-left px-4 py-3 font-medium text-muted-foreground">Candidate</th>
-                    <th className="text-left px-4 py-3 font-medium text-muted-foreground">Speciality</th>
-                    <th className="text-left px-4 py-3 font-medium text-muted-foreground">Unit</th>
-                    <th className="text-left px-4 py-3 font-medium text-muted-foreground">Score</th>
-                    <th className="text-left px-4 py-3 font-medium text-muted-foreground">Status</th>
-                    <th className="text-right px-4 py-3 font-medium text-muted-foreground">Letter</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {allocations.map((a) => (
-                    <tr key={a.id} className="border-b last:border-0 hover:bg-muted/20">
-                      <td className="px-4 py-3 font-bold text-muted-foreground">#{a.rank ?? "—"}</td>
-                      <td className="px-4 py-3">
-                        <p className="font-medium">{a.candidateName}</p>
-                        <p className="text-xs text-muted-foreground font-mono">{a.candidateCode}</p>
-                      </td>
-                      <td className="px-4 py-3 text-muted-foreground">{a.specialityName ?? "—"}</td>
-                      <td className="px-4 py-3 text-muted-foreground">{a.unitName ?? "—"}</td>
-                      <td className="px-4 py-3 font-semibold">{a.totalScore?.toFixed(1) ?? "—"}</td>
-                      <td className="px-4 py-3">
-                        <Badge className={statusColors[a.status] ?? ""} variant="secondary">{a.status}</Badge>
-                      </td>
-                      <td className="px-4 py-3 text-right">
-                        <Button variant="ghost" size="sm" onClick={() => downloadLetter(a.id)}>
-                          <Download className="h-3.5 w-3.5" />
-                        </Button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+            <Table>
+              <TableHeader className="bg-slate-50/50">
+                <TableRow>
+                  <TableHead className="w-12 text-center">Rank</TableHead>
+                  <TableHead>Candidate</TableHead>
+                  <TableHead>Scores</TableHead>
+                  <TableHead>Total</TableHead>
+                  <TableHead>Preferences</TableHead>
+                  <TableHead className="text-right">Action</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {scoredCandidates.map((c: any, index: number) => {
+                  const isAllocated = c.status === 'allocated' && c.reviewNotes?.startsWith('Allocated to ');
+                  const allocatedSpec = isAllocated ? c.reviewNotes.replace('Allocated to ', '') : null;
+                  
+                  return (
+                    <TableRow key={c.id} className={isAllocated ? "bg-emerald-50/30" : ""}>
+                      <TableCell className="text-center font-bold text-muted-foreground">{index + 1}</TableCell>
+                      <TableCell>
+                        <div className="font-bold">{c.fullName}</div>
+                        <div className="text-[10px] text-muted-foreground">{c.candidateCode}</div>
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex flex-col gap-0.5">
+                          <span className="text-[10px] text-muted-foreground uppercase tracking-tight">M: {c.mcqScore || 0} | P: {c.psychometricScore || 0}</span>
+                          <span className="text-[10px] text-muted-foreground uppercase tracking-tight">Int: {c.interviewAvg.toFixed(1)}</span>
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <div className="text-sm font-black text-primary">{c.totalScore.toFixed(2)}</div>
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex flex-col gap-1">
+                          {c.preferences.slice(0, 3).map((p: string, i: number) => (
+                            <div key={i} className="flex items-center gap-1.5 group">
+                              <Badge variant={p === allocatedSpec ? "default" : "outline"} className={`text-[9px] h-4 px-1 ${p === allocatedSpec ? "bg-emerald-600" : "text-muted-foreground"}`}>
+                                {i + 1}
+                              </Badge>
+                              <span className={`text-[11px] ${p === allocatedSpec ? "font-bold text-emerald-700" : "text-slate-600"}`}>
+                                {p}
+                              </span>
+                              {!isAllocated && (occupancy[p] || 0) < (SEAT_MATRIX[p] || 0) && (
+                                <button 
+                                  onClick={() => allocationMutation.mutate({ id: c.id, specialization: p })}
+                                  className="hidden group-hover:flex items-center text-[10px] text-emerald-600 font-bold hover:underline"
+                                >
+                                  <CheckCircle2 className="h-3 w-3 mr-0.5" /> Allocate
+                                </button>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      </TableCell>
+                      <TableCell className="text-right">
+                        {isAllocated ? (
+                          <div className="flex flex-col items-end">
+                            <Badge className="bg-emerald-100 text-emerald-700 hover:bg-emerald-100 border-emerald-200">
+                              <UserCheck className="h-3 w-3 mr-1" /> ALLOCATED
+                            </Badge>
+                            <span className="text-[10px] text-emerald-600 font-bold mt-1 uppercase">{allocatedSpec}</span>
+                          </div>
+                        ) : (
+                          <div className="text-xs text-muted-foreground italic">Pending...</div>
+                        )}
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
+              </TableBody>
+            </Table>
           </CardContent>
         </Card>
-      )}
+      </div>
     </div>
   );
 }
+

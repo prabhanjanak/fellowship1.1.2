@@ -1,10 +1,12 @@
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useLocation } from "wouter";
-import { api } from "@/lib/api";
-import { useAuth } from "@/contexts/AuthContext";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { Users, BookOpen, Award, ClipboardList, Clock, Building2 } from "lucide-react";
+import { api } from "../lib/api";
+import { useAuth } from "../contexts/AuthContext";
+import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/card";
+import { Badge } from "../components/ui/badge";
+import { Button } from "../components/ui/button";
+import { Users, BookOpen, Award, ClipboardList, Clock, Building2, Database, Loader2 } from "lucide-react";
+import { useToast } from "../hooks/use-toast";
 
 interface DashboardStats {
   candidates: number;
@@ -50,6 +52,8 @@ const statusColors: Record<string, string> = {
 
 export default function DashboardPage() {
   const { user } = useAuth();
+  const { toast } = useToast();
+  const qc = useQueryClient();
   const role = user?.role ?? "";
 
   const { data: stats } = useQuery<DashboardStats>({
@@ -103,13 +107,39 @@ export default function DashboardPage() {
     { title: "Pending Review", value: stats?.pendingReview ?? "—", icon: Clock, color: "bg-amber-600", href: canSeeCandidates ? "/candidates" : undefined },
   ];
 
+  const seedMutation = useMutation({
+    mutationFn: () => api.post("/debug/seed", {}),
+    onSuccess: () => {
+      toast({ title: "Database seeded successfully" });
+      qc.invalidateQueries();
+    },
+    onError: (e: Error) => toast({ title: "Seed failed", description: e.message, variant: "destructive" }),
+  });
+
   return (
     <div className="p-6 space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold">Dashboard</h1>
-        <p className="text-muted-foreground mt-1">
-          {role === "unit_coordinator" ? `Unit Overview — ${user?.fullName}` : "Fellowship Exam Management Overview"}
-        </p>
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-bold">Dashboard</h1>
+          <p className="text-muted-foreground mt-1">
+            {role === "unit_coordinator" ? `Unit Overview — ${user?.fullName}` : "Fellowship Exam Management Overview"}
+          </p>
+        </div>
+        {role === "super_admin" && (
+          <Button 
+            variant="outline" 
+            className="gap-2 border-dashed border-orange-300 text-orange-600 hover:bg-orange-50 hover:text-orange-700"
+            onClick={() => {
+              if (confirm("This will WIPE all existing programs, candidates, and forms and replace them with dummy test data. Continue?")) {
+                seedMutation.mutate();
+              }
+            }}
+            disabled={seedMutation.isPending}
+          >
+            {seedMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Database className="h-4 w-4" />}
+            Seed Test Data
+          </Button>
+        )}
       </div>
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
@@ -143,3 +173,4 @@ export default function DashboardPage() {
     </div>
   );
 }
+

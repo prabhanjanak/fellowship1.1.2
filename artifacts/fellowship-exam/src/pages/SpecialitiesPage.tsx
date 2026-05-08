@@ -1,14 +1,14 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { api } from "@/lib/api";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Badge } from "@/components/ui/badge";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
+import { api } from "../lib/api";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "../components/ui/card";
+import { Button } from "../components/ui/button";
+import { Input } from "../components/ui/input";
+import { Label } from "../components/ui/label";
+import { Badge } from "../components/ui/badge";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "../components/ui/dialog";
 import { Plus, Trash2, Loader2, Star, CheckCircle2, AlertCircle } from "lucide-react";
-import { useToast } from "@/hooks/use-toast";
+import { useToast } from "../hooks/use-toast";
 
 interface Speciality {
   id: number;
@@ -168,3 +168,4 @@ export default function SpecialitiesPage() {
     </div>
   );
 }
+

@@ -16,6 +16,7 @@ import {
   allocationsTable,
   doctorAssignmentsTable,
   candidateExamAssignmentsTable,
+  applicationSubmissionsTable,
 } from "@workspace/db";
 import { requireAuth, requireRole } from "../middleware/auth";
 
@@ -105,6 +106,15 @@ async function fullCandidate(c: typeof candidatesTable.$inferSelect) {
         startedAt: a.startedAt.toISOString(),
       };
     }),
+    paymentInfo: await (async () => {
+      const [sub] = await db.select().from(applicationSubmissionsTable).where(eq(applicationSubmissionsTable.email, c.email));
+      if (!sub) return null;
+      return {
+        amount: sub.paidAmount ? sub.paidAmount / 100 : null,
+        id: sub.paymentId,
+        mode: sub.paymentMode
+      };
+    })(),
   };
 }
 
@@ -136,6 +146,7 @@ router.get("/candidates", requireAuth, requireRole("super_admin", "program_admin
   const allPrefs = await db.select().from(candidatePreferencesTable);
   const allSpecs = await db.select().from(specialitiesTable);
   const allDocs = await db.select().from(documentsTable);
+  const allSubmissions = await db.select().from(applicationSubmissionsTable);
 
   const out = candidates.map((c) => {
     const unit = c.unitId ? units.find((u) => u.id === c.unitId) : null;
@@ -165,6 +176,15 @@ router.get("/candidates", requireAuth, requireRole("super_admin", "program_admin
       totalScore: null,
       rank: null,
       createdAt: c.createdAt.toISOString(),
+      paymentInfo: (() => {
+        const sub = allSubmissions.find(s => s.email === c.email);
+        if (!sub) return null;
+        return {
+          amount: sub.paidAmount ? sub.paidAmount / 100 : null,
+          id: sub.paymentId,
+          mode: sub.paymentMode
+        };
+      })(),
     };
   });
   res.json(out);

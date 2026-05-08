@@ -1,15 +1,15 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { api } from "@/lib/api";
-import { useAuth } from "@/contexts/AuthContext";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
-import { Badge } from "@/components/ui/badge";
-import { Plus, GraduationCap, Users, Star } from "lucide-react";
-import { useToast } from "@/hooks/use-toast";
+import { api } from "../lib/api";
+import { useAuth } from "../contexts/AuthContext";
+import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/card";
+import { Button } from "../components/ui/button";
+import { Input } from "../components/ui/input";
+import { Label } from "../components/ui/label";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "../components/ui/dialog";
+import { Badge } from "../components/ui/badge";
+import { Plus, GraduationCap, Users, Star, Trash2 } from "lucide-react";
+import { useToast } from "../hooks/use-toast";
 
 interface Program {
   id: number;
@@ -46,6 +46,15 @@ export default function ProgramsPage() {
     onError: (e: Error) => toast({ title: "Error", description: e.message, variant: "destructive" }),
   });
 
+  const deleteMutation = useMutation({
+    mutationFn: (id: number) => api.delete(`/programs/${id}`),
+    onSuccess: () => {
+      toast({ title: "Program deleted" });
+      qc.invalidateQueries({ queryKey: ["programs"] });
+    },
+    onError: (e: Error) => toast({ title: "Error", description: e.message, variant: "destructive" }),
+  });
+
   return (
     <div className="p-6 space-y-6">
       <div className="flex items-center justify-between">
@@ -70,14 +79,30 @@ export default function ProgramsPage() {
       ) : (
         <div className="grid gap-4 md:grid-cols-2">
           {programs.map((p) => (
-            <Card key={p.id} className="hover:shadow-md transition-shadow">
+            <Card key={p.id} className="hover:shadow-md transition-shadow relative group">
               <CardHeader className="pb-3">
                 <div className="flex items-start justify-between">
                   <div>
                     <CardTitle className="text-base">{p.name}</CardTitle>
                     <p className="text-xs text-muted-foreground mt-0.5">{p.description}</p>
                   </div>
-                  <Badge variant="secondary">{p.academicYear}</Badge>
+                  <div className="flex items-center gap-2">
+                    <Badge variant="secondary">{p.academicYear}</Badge>
+                    {canManage && (
+                      <Button 
+                        variant="ghost" 
+                        size="sm" 
+                        className="h-7 w-7 p-0 text-muted-foreground hover:text-red-600 opacity-0 group-hover:opacity-100 transition-opacity"
+                        onClick={() => {
+                          if (confirm("Are you sure you want to delete this program? All associated forms and data will be lost.")) {
+                            deleteMutation.mutate(p.id);
+                          }
+                        }}
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </Button>
+                    )}
+                  </div>
                 </div>
               </CardHeader>
               <CardContent className="space-y-3">
@@ -131,3 +156,4 @@ export default function ProgramsPage() {
     </div>
   );
 }
+

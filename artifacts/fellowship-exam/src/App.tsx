@@ -1,31 +1,36 @@
 import { Switch, Route, Router as WouterRouter } from "wouter";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { Toaster } from "@/components/ui/toaster";
-import { TooltipProvider } from "@/components/ui/tooltip";
-import { AuthProvider, useAuth } from "@/contexts/AuthContext";
-import { ThemeProvider } from "@/contexts/ThemeContext";
-import AppSidebar from "@/components/AppSidebar";
-import { PageTransition } from "@/components/PageTransition";
-import LoginPage from "@/pages/LoginPage";
-import ForcePasswordResetPage from "@/pages/ForcePasswordResetPage";
-import DashboardPage from "@/pages/DashboardPage";
-import CandidatesPage from "@/pages/CandidatesPage";
-import ExamsPage from "@/pages/ExamsPage";
-import ProgramsPage from "@/pages/ProgramsPage";
-import UsersPage from "@/pages/UsersPage";
-import InterviewsPage from "@/pages/InterviewsPage";
-import RankingsPage from "@/pages/RankingsPage";
-import AllocationsPage from "@/pages/AllocationsPage";
-import ProfilePage from "@/pages/ProfilePage";
-import ResultsPage from "@/pages/ResultsPage";
-import ApplicationFormsPage from "@/pages/ApplicationFormsPage";
-import UnitsPage from "@/pages/UnitsPage";
-import SeatMatrixPage from "@/pages/SeatMatrixPage";
-import PaymentsPage from "@/pages/PaymentsPage";
-import ApplyPage from "@/pages/ApplyPage";
-import DisplayPage from "@/pages/DisplayPage";
-import NotFound from "@/pages/not-found";
+import { Toaster } from "./components/ui/toaster";
+import { TooltipProvider } from "./components/ui/tooltip";
+import { AuthProvider, useAuth } from "./contexts/AuthContext";
+import { ThemeProvider } from "./contexts/ThemeContext";
+import AppSidebar from "./components/AppSidebar";
+import { PageTransition } from "./components/PageTransition";
+import LoginPage from "./pages/LoginPage";
+import ForcePasswordResetPage from "./pages/ForcePasswordResetPage";
+import DashboardPage from "./pages/DashboardPage";
+import CandidatesPage from "./pages/CandidatesPage";
+import ExamsPage from "./pages/ExamsPage";
+import ProgramsPage from "./pages/ProgramsPage";
+import UsersPage from "./pages/UsersPage";
+import InterviewsPage from "./pages/InterviewsPage";
+import RankingsPage from "./pages/RankingsPage";
+import AllocationsPage from "./pages/AllocationsPage";
+import ProfilePage from "./pages/ProfilePage";
+import ResultsPage from "./pages/ResultsPage";
+import ApplicationFormsPage from "./pages/ApplicationFormsPage";
+import UnitsPage from "./pages/UnitsPage";
+import SeatMatrixPage from "./pages/SeatMatrixPage";
+import PaymentsPage from "./pages/PaymentsPage";
+import BatchesPage from "./pages/BatchesPage";
+import ReportsPage from "./pages/ReportsPage";
+import TemplatesPage from "./pages/TemplatesPage";
+import ApplyPage from "./pages/ApplyPage";
+import QueueDisplayPage from "./pages/QueueDisplayPage";
+import DisplayPage from "./pages/DisplayPage";
+import NotFound from "./pages/not-found";
 import { Loader2 } from "lucide-react";
+import EmailSettingsPage from "./pages/EmailSettingsPage";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -69,9 +74,14 @@ function AppRouter() {
             <Route path="/units" component={UnitsPage} />
             <Route path="/seat-matrix" component={SeatMatrixPage} />
             <Route path="/payments" component={PaymentsPage} />
+            <Route path="/batches" component={BatchesPage} />
+            <Route path="/reports" component={ReportsPage} />
+            <Route path="/templates" component={TemplatesPage} />
+            <Route path="/email-settings" component={EmailSettingsPage} />
             <Route path="/profile" component={ProfilePage} />
             <Route path="/results" component={ResultsPage} />
             <Route path="/display" component={DisplayPage} />
+            <Route path="/tv" component={QueueDisplayPage} />
             <Route component={NotFound} />
           </Switch>
         </PageTransition>
@@ -81,33 +91,27 @@ function AppRouter() {
 }
 
 function App() {
-  // Public apply route — render outside auth entirely
-  // pathname may be /apply/TOKEN or /admin/apply/TOKEN depending on base
-  const applyMatch = window.location.pathname.match(/\/apply\/([^/?#]+)/);
-  if (applyMatch) {
-    const token = applyMatch[1]!;
-    return (
-      <QueryClientProvider client={queryClient}>
-        <TooltipProvider>
-          <ThemeProvider>
-            <ApplyPage token={token} />
-            <Toaster />
-          </ThemeProvider>
-        </TooltipProvider>
-      </QueryClientProvider>
-    );
-  }
-
   return (
     <QueryClientProvider client={queryClient}>
       <TooltipProvider>
         <ThemeProvider>
-          <AuthProvider>
-            <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
-              <AppRouter />
-            </WouterRouter>
-            <Toaster />
-          </AuthProvider>
+          <WouterRouter base={(import.meta.env.BASE_URL || "").replace(/\/$/, "")}>
+            <Switch>
+              {/* Public Routes - NO Sidebar, NO Auth needed */}
+              <Route path="/apply/:token">
+                {(params) => <ApplyPage token={params.token} />}
+              </Route>
+              <Route path="/tv" component={QueueDisplayPage} />
+              
+              {/* Auth Routes */}
+              <Route>
+                <AuthProvider>
+                  <AppRouter />
+                  <Toaster />
+                </AuthProvider>
+              </Route>
+            </Switch>
+          </WouterRouter>
         </ThemeProvider>
       </TooltipProvider>
     </QueryClientProvider>

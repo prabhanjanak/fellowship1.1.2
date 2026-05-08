@@ -1,18 +1,18 @@
 import { useState, useRef } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { api } from "@/lib/api";
-import { useAuth } from "@/contexts/AuthContext";
-import { Card, CardContent } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
-import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Checkbox } from "@/components/ui/checkbox";
-import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
+import { api } from "../lib/api";
+import { useAuth } from "../contexts/AuthContext";
+import { Card, CardContent } from "../components/ui/card";
+import { Badge } from "../components/ui/badge";
+import { Button } from "../components/ui/button";
+import { Input } from "../components/ui/input";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "../components/ui/dialog";
+import { Label } from "../components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../components/ui/select";
+import { Checkbox } from "../components/ui/checkbox";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "../components/ui/alert-dialog";
 import { Search, UserPlus, Eye, FolderOpen, ExternalLink, Upload, Filter, ClipboardEdit, Trash2, Building2, CalendarDays, Info, ChevronDown, ChevronUp } from "lucide-react";
-import { useToast } from "@/hooks/use-toast";
+import { useToast } from "../hooks/use-toast";
 
 interface CandidateDocument {
   id: number; docType: string; fileName: string; fileUrl: string | null;
@@ -25,6 +25,7 @@ interface Candidate {
   qualification?: string | null; collegeName?: string | null; address?: string | null;
   specializations: string[]; documents: CandidateDocument[]; createdAt?: string;
   mcqScore?: number | null; psychometricScore?: number | null;
+  paymentInfo?: { amount: number | null; id: string | null; mode: string | null } | null;
 }
 
 const statusColors: Record<string, string> = {
@@ -467,6 +468,7 @@ export default function CandidatesPage() {
                     <th className="text-left px-4 py-3 font-medium text-muted-foreground">Specialization(s)</th>
                     {canEnterScores && <th className="text-center px-3 py-3 font-medium text-muted-foreground">MCQ</th>}
                     {canEnterScores && <th className="text-center px-3 py-3 font-medium text-muted-foreground">Psycho</th>}
+                    <th className="text-left px-4 py-3 font-medium text-muted-foreground">Payment</th>
                     <th className="text-left px-4 py-3 font-medium text-muted-foreground">Status</th>
                     <th className="text-right px-4 py-3 font-medium text-muted-foreground">Actions</th>
                   </tr>
@@ -512,6 +514,17 @@ export default function CandidatesPage() {
                             : <span className="text-muted-foreground text-xs">—</span>}
                         </td>
                       )}
+                      <td className="px-4 py-3">
+                        {c.paymentInfo ? (
+                          <div className="space-y-0.5">
+                            <div className="font-bold text-emerald-600">₹{c.paymentInfo.amount}</div>
+                            <div className="text-[10px] text-muted-foreground font-mono">{c.paymentInfo.id}</div>
+                            <div className="text-[9px] uppercase font-bold text-muted-foreground">{c.paymentInfo.mode}</div>
+                          </div>
+                        ) : (
+                          <span className="text-xs text-muted-foreground italic">No payment info</span>
+                        )}
+                      </td>
                       <td className="px-4 py-3">
                         {canManage ? (
                           <div className="space-y-1">
@@ -881,3 +894,4 @@ export default function CandidatesPage() {
     </div>
   );
 }
+

@@ -13,7 +13,7 @@ await esbuild({
   format: "esm",
   outfile: path.resolve(artifactDir, "dist/seed.mjs"),
   logLevel: "warning",
-  external: ["*.node", "pg-native", "bcrypt", "argon2", "pdfkit", "fontkit", "@swc/helpers"],
+  external: ["pg", "*.node", "pg-native", "bcrypt", "argon2", "pdfkit", "fontkit", "@swc/helpers"],
   banner: {
     js: `import { createRequire as __cr } from 'node:module';
 import __p from 'node:path';

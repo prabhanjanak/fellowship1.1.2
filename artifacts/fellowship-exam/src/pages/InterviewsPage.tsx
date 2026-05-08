@@ -1,20 +1,20 @@
 import { useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { api } from "@/lib/api";
-import { useAuth } from "@/contexts/AuthContext";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Badge } from "@/components/ui/badge";
+import { api } from "../lib/api";
+import { useAuth } from "../contexts/AuthContext";
+import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/card";
+import { Button } from "../components/ui/button";
+import { Input } from "../components/ui/input";
+import { Label } from "../components/ui/label";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "../components/ui/dialog";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../components/ui/select";
+import { Badge } from "../components/ui/badge";
 import {
   Stethoscope, UserPlus, Trash2, Star, Activity, RadioTower,
   LayoutGrid, Plus, Settings, Users, ArrowRight, CheckCircle2,
   Clock, DoorOpen, UserCheck, X,
 } from "lucide-react";
-import { useToast } from "@/hooks/use-toast";
+import { useToast } from "../hooks/use-toast";
 
 interface DoctorRow {
   doctorId: number; doctorName: string; doctorEmail: string;
@@ -70,7 +70,7 @@ export default function InterviewsPage() {
 }
 
 /* ─── Doctor View ─── */
-function DoctorView({ toast, qc }: { toast: ReturnType<typeof import("@/hooks/use-toast").useToast>["toast"]; qc: ReturnType<typeof useQueryClient> }) {
+function DoctorView({ toast, qc }: { toast: ReturnType<typeof import("../hooks/use-toast").useToast>["toast"]; qc: ReturnType<typeof useQueryClient> }) {
   const [scoreOpen, setScoreOpen] = useState<DoctorAssignment | null>(null);
   const [score, setScore] = useState("");
   const [remarks, setRemarks] = useState("");
@@ -189,9 +189,12 @@ function DoctorView({ toast, qc }: { toast: ReturnType<typeof import("@/hooks/us
 
       <Dialog open={!!scoreOpen} onOpenChange={() => setScoreOpen(null)}>
         <DialogContent>
-          <DialogHeader><DialogTitle>Interview Score — {scoreOpen?.candidateName}</DialogTitle></DialogHeader>
+          <DialogHeader>
+            <DialogTitle>Interview Score — {scoreOpen?.candidateName}</DialogTitle>
+            <p className="text-xs text-muted-foreground font-mono">Total Marks for this session: {scoreOpen?.batchId ? "Defined by Batch" : "100"}</p>
+          </DialogHeader>
           <div className="space-y-4">
-            <div className="space-y-1.5"><Label>Score (0–100)</Label><Input type="number" min={0} max={100} value={score} onChange={(e) => setScore(e.target.value)} placeholder="75" /></div>
+            <div className="space-y-1.5"><Label>Score</Label><Input type="number" min={0} value={score} onChange={(e) => setScore(e.target.value)} placeholder="Enter marks..." /></div>
             <div className="space-y-1.5"><Label>Remarks (optional)</Label><Input value={remarks} onChange={(e) => setRemarks(e.target.value)} placeholder="Clinical assessment notes…" /></div>
           </div>
           <DialogFooter>
@@ -207,7 +210,7 @@ function DoctorView({ toast, qc }: { toast: ReturnType<typeof import("@/hooks/us
 }
 
 /* ─── Admin / CEC View ─── */
-function AdminView({ toast, qc, isCEC }: { toast: ReturnType<typeof import("@/hooks/use-toast").useToast>["toast"]; qc: ReturnType<typeof useQueryClient>; isCEC: boolean }) {
+function AdminView({ toast, qc, isCEC }: { toast: ReturnType<typeof import("../hooks/use-toast").useToast>["toast"]; qc: ReturnType<typeof useQueryClient>; isCEC: boolean }) {
   const [activeTab, setActiveTab] = useState<"panels" | "live" | "panel" | "scores">("panels");
   const [assignDoctorId, setAssignDoctorId] = useState<number | null>(null);
   const [assignCandidateId, setAssignCandidateId] = useState("");
@@ -421,22 +424,53 @@ function AdminView({ toast, qc, isCEC }: { toast: ReturnType<typeof import("@/ho
                   <thead className="border-b bg-muted/40">
                     <tr>
                       <th className="text-left px-4 py-3 font-medium text-muted-foreground">Candidate</th>
-                      <th className="text-left px-4 py-3 font-medium text-muted-foreground">Doctor</th>
-                      <th className="text-left px-4 py-3 font-medium text-muted-foreground">Score</th>
-                      <th className="text-left px-4 py-3 font-medium text-muted-foreground">Remarks</th>
+                      <th className="text-left px-4 py-3 font-medium text-muted-foreground">Panel / Batch</th>
+                      <th className="text-center px-4 py-3 font-medium text-muted-foreground">Avg. Score</th>
+                      <th className="text-left px-4 py-3 font-medium text-muted-foreground">Dr. Breakdown</th>
                       <th className="text-left px-4 py-3 font-medium text-muted-foreground">Date</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {scores.map((s) => (
-                      <tr key={s.id} className="border-b last:border-0 hover:bg-muted/20">
-                        <td className="px-4 py-3"><p className="font-medium">{s.candidateName}</p><p className="text-xs text-muted-foreground font-mono">{s.candidateCode}</p></td>
-                        <td className="px-4 py-3 text-sm text-muted-foreground">{s.doctorName}</td>
-                        <td className="px-4 py-3 font-bold text-lg text-primary">{s.score}</td>
-                        <td className="px-4 py-3 text-muted-foreground text-sm">{s.remarks ?? "—"}</td>
-                        <td className="px-4 py-3 text-xs text-muted-foreground">{new Date(s.submittedAt).toLocaleDateString("en-IN")}</td>
-                      </tr>
-                    ))}
+                    {(() => {
+                      // Group scores by candidate to show average
+                      const grouped: Record<number, any> = {};
+                      scores.forEach((s: any) => {
+                        if (!grouped[s.candidateId]) {
+                          grouped[s.candidateId] = { 
+                            name: s.candidateName, 
+                            code: s.candidateCode,
+                            scores: [],
+                            totalMarks: s.totalMarks || 100
+                          };
+                        }
+                        grouped[s.candidateId].scores.push(s);
+                      });
+
+                      return Object.entries(grouped).map(([cid, data]: [string, any]) => {
+                        const avg = data.scores.reduce((acc: number, s: any) => acc + s.score, 0) / data.scores.length;
+                        return (
+                          <tr key={cid} className="border-b last:border-0 hover:bg-muted/20">
+                            <td className="px-4 py-3"><p className="font-medium">{data.name}</p><p className="text-xs text-muted-foreground font-mono">{data.code}</p></td>
+                            <td className="px-4 py-3 text-sm text-muted-foreground">Batch Group</td>
+                            <td className="px-4 py-3 text-center">
+                              <Badge variant="outline" className="text-lg font-bold text-primary">
+                                {avg.toFixed(1)} / {data.totalMarks}
+                              </Badge>
+                            </td>
+                            <td className="px-4 py-3">
+                              <div className="flex flex-col gap-1">
+                                {data.scores.map((s: any) => (
+                                  <div key={s.id} className="text-[10px] text-muted-foreground">
+                                    <span className="font-semibold">{s.doctorName}:</span> {s.score}
+                                  </div>
+                                ))}
+                              </div>
+                            </td>
+                            <td className="px-4 py-3 text-xs text-muted-foreground">{new Date(data.scores[0].submittedAt).toLocaleDateString("en-IN")}</td>
+                          </tr>
+                        );
+                      });
+                    })()}
                   </tbody>
                 </table>
               </div>
@@ -485,7 +519,7 @@ function AdminView({ toast, qc, isCEC }: { toast: ReturnType<typeof import("@/ho
 
 /* ─── Panels Tab ─── */
 function PanelsTab({ toast, qc, candidates }: {
-  toast: ReturnType<typeof import("@/hooks/use-toast").useToast>["toast"];
+  toast: ReturnType<typeof import("../hooks/use-toast").useToast>["toast"];
   qc: ReturnType<typeof useQueryClient>;
   candidates: Candidate[];
 }) {
@@ -882,3 +916,4 @@ function PanelsTab({ toast, qc, candidates }: {
     </div>
   );
 }
+

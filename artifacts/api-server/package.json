@@ -6,16 +6,17 @@
   "scripts": {
     "dev": "node ./run-dev.mjs",
     "build": "node ./build.mjs",
-    "build:all": "BASE_PATH=/admin pnpm --filter @workspace/fellowship-exam run build && node ./build.mjs",
+    "build:all": "set BASE_PATH=/admin && pnpm --filter @workspace/fellowship-exam run build && node ./build.mjs",
     "start": "node --enable-source-maps --env-file=.env ./dist/index.mjs",
     "start:prod": "NODE_ENV=production node --enable-source-maps --env-file=.env ./dist/index.mjs",
     "prod": "pnpm run build:all && pnpm run start:prod",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "seed": "node ./build-seed.mjs && node ./dist/seed.mjs"
+    "seed": "node ./build-seed.mjs && node --env-file=.env ./dist/seed.mjs"
   },
   "dependencies": {
     "@google-cloud/storage": "^7.19.0",
     "@types/nodemailer": "^8.0.0",
+    "@types/pg": "^8.18.0",
     "@workspace/api-zod": "workspace:*",
     "@workspace/db": "workspace:*",
     "bcryptjs": "^3.0.3",
@@ -28,6 +29,7 @@
     "jsonwebtoken": "^9.0.3",
     "nodemailer": "^8.0.7",
     "pdfkit": "^0.18.0",
+    "pg": "^8.20.0",
     "pino": "^9",
     "pino-http": "^10",
     "razorpay": "^2.9.6",

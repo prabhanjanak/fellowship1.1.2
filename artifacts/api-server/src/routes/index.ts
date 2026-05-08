@@ -24,6 +24,8 @@ import seatMatrixRouter from "./seat-matrix";
 import paymentSettingsRouter from "./payment-settings";
 import storageRouter from "./storage";
 import paymentRouter from "./payment";
+import examManagementRouter from "./exam-management";
+import debugRouter from "./debug";
 
 const router: IRouter = Router();
 
@@ -52,5 +54,7 @@ router.use(seatMatrixRouter);
 router.use(paymentSettingsRouter);
 router.use(storageRouter);
 router.use(paymentRouter);
+router.use(examManagementRouter);
+router.use(debugRouter);
 
 export default router;

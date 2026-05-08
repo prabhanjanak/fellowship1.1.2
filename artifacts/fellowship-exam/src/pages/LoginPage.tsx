@@ -1,14 +1,14 @@
 import { useState } from "react";
-import logoUrl from "@assets/seh_sav_logo_1777703794142.jpg";
-import { useAuth } from "@/contexts/AuthContext";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Card, CardContent, CardHeader } from "@/components/ui/card";
-import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import logoUrl from "../assets/seh_sav_logo_1777703794142.jpg";
+import { useAuth } from "../contexts/AuthContext";
+import { Button } from "../components/ui/button";
+import { Input } from "../components/ui/input";
+import { Label } from "../components/ui/label";
+import { Card, CardContent, CardHeader } from "../components/ui/card";
+import { Alert, AlertDescription } from "../components/ui/alert";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "../components/ui/dialog";
 import { Loader2, Eye, EyeOff, HelpCircle, PhoneCall } from "lucide-react";
-import ParticleCanvas from "@/components/ParticleCanvas";
+import ParticleCanvas from "../components/ParticleCanvas";
 
 export default function LoginPage() {
   const { login } = useAuth();
@@ -107,3 +107,4 @@ export default function LoginPage() {
     </div>
   );
 }
+

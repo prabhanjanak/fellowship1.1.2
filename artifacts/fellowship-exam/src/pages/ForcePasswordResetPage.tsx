@@ -1,14 +1,14 @@
 import { useState } from "react";
-import logoUrl from "@assets/seh_sav_logo_1777703794142.jpg";
-import { useAuth } from "@/contexts/AuthContext";
-import { api } from "@/lib/api";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Card, CardContent, CardHeader } from "@/components/ui/card";
-import { Alert, AlertDescription } from "@/components/ui/alert";
+import logoUrl from "../assets/seh_sav_logo_1777703794142.jpg";
+import { useAuth } from "../contexts/AuthContext";
+import { api } from "../lib/api";
+import { Button } from "../components/ui/button";
+import { Input } from "../components/ui/input";
+import { Label } from "../components/ui/label";
+import { Card, CardContent, CardHeader } from "../components/ui/card";
+import { Alert, AlertDescription } from "../components/ui/alert";
 import { Loader2, KeyRound, Eye, EyeOff, CheckCircle2 } from "lucide-react";
-import ParticleCanvas from "@/components/ParticleCanvas";
+import ParticleCanvas from "../components/ParticleCanvas";
 
 export default function ForcePasswordResetPage() {
   const { user, refreshUser, logout } = useAuth();
@@ -132,3 +132,4 @@ export default function ForcePasswordResetPage() {
     </div>
   );
 }
+

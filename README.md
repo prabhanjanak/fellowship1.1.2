@@ -1,109 +1,60 @@
-# Sankara Academy of Vision - Fellowship Management System (v4)
+# Fellowship Examination & Admission Portal (v6)
 
-A comprehensive, professional-grade platform designed for managing medical fellowship applications, entrance examinations, interview scheduling, and seat allocations at the Sankara Academy of Vision.
+A professional, end-to-end management system for Fellowship programs, specifically tailored for the **Sankara Academy of Vision**.
 
-## 🚀 Project Overview
+## 🚀 Overview
+This portal handles the entire lifecycle of fellowship admissions:
+- **Application Portal**: Multi-step forms with document uploads and Razorpay integration.
+* **Admin Dashboard**: Real-time stats and management of candidates, programs, and units.
+* **Examination System**: Online entrance exams with automated scoring.
+* **Interview Management**: Live panel queue tracking (Waiting Hall TV Display).
+* **Seat Allocation**: Smart merit-based allocation system with seat matrix tracking.
+* **Communication**: Automated email triggers for call letters and admission offers.
 
-This system streamlines the entire lifecycle of a fellowship program—from the initial application by a candidate to the final seat allocation across various Sankara units and specialties. It is built with a focus on visual excellence, data integrity, and administrative efficiency.
+## 🛠️ Technology Stack
+- **Frontend**: React (Vite), TailwindCSS, Lucide Icons, Recharts, Mammoth.js (for .docx).
+- **Backend**: Node.js (Express), TypeScript.
+- **Database**: PostgreSQL with Drizzle ORM.
+- **State Management**: React Query (TanStack).
 
-### Key Features
+## 📦 Project Structure
+- `/artifacts/fellowship-exam`: The main frontend React application.
+- `/artifacts/api-server`: The backend Express API service.
+- `/lib/db`: Shared database schema and Drizzle configurations.
+- `/artifacts/fellowship_data_export.sql`: **Current Database State (Schema + Data)**.
 
-*   **Intelligent Application Form**: A dynamic, multi-step application wizard with conditional visibility logic, real-time validation, and professional UI components (e.g., surgical experience tables, high-fidelity Indian phone inputs).
-*   **Dynamic Form Builder**: Admins can configure form sections, fields, and instructions directly from the dashboard without touching code.
-*   **Payment Infrastructure**: 
-    *   Integrated **Razorpay** gateway for secure fee payments.
-    *   Dynamic UPI QR code generation as a secondary/fallback payment method.
-    *   Admin-configurable fee amounts per program.
-*   **Role-Based Access Control (RBAC)**:
-    *   **Super Admin**: Global configuration, user management, and system-wide overrides.
-    *   **Program Admin**: Specific control over fellowship programs and application forms.
-    *   **Central Exam Coordinator**: Manages the logistics of exams and interviews.
-    *   **Display Operator**: Specialized role for managing live interview queue displays.
-    *   **Candidate**: Restricted access to application status and exam portals.
-*   **Seat Matrix Management**: Centralized management of available seats across units (e.g., Coimbatore, Bangalore, Guntur) and specialties (e.g., Cornea, Glaucoma, Vitreo-Retina).
-*   **Interview & Exam Ecosystem**:
-    *   Automated Exam assignments.
-    *   Interview Panel creation and doctor assignments.
-    *   Live **Panel Queue Management** with real-time status updates.
-    *   Scoring interface for interviewers.
-*   **Results & Rankings**: Automatic calculation of final scores based on weighted exam and interview results, generating rank-based allocation lists.
-*   **Data Integration**: Bi-directional sync capabilities with Google Sheets for external reporting and data backup.
+## ⚙️ Deployment Instructions (For Seniors)
 
-## 🛠 Tech Stack
-
-### Frontend
-*   **Framework**: React (with Vite)
-*   **State Management**: TanStack Query (React Query)
-*   **Styling**: Vanilla CSS + TailwindCSS (for utility-heavy components)
-*   **Components**: Radix UI primitives, Lucide Icons, Framer Motion for premium animations.
-*   **Features**: Dark/Light mode support, Responsive Design.
-
-### Backend
-*   **Environment**: Node.js with TypeScript
-*   **Framework**: Express.js
-*   **ORM**: Drizzle ORM (Type-safe SQL)
-*   **Database**: PostgreSQL
-*   **Security**: JWT-based authentication, password hashing (bcrypt), and middleware-level role protection.
-*   **Storage**: Hybrid local/cloud object storage for candidate documents (LORs, photos).
-
-## 📂 Project Structure
-
-```text
-├── artifacts/
-│   ├── api-server/         # Node.js Express API (Backend)
-│   ├── fellowship-exam/    # React/Vite Application (Frontend)
-│   ├── db/                 # Shared Database Schemas and Migrations
-│   └── ...                 # Exported data and scripts
-├── deploy/                 # Deployment configurations and scripts
-└── README.md               # You are here
-```
-
-## ⚙️ Setup & Installation
-
-### Prerequisites
-*   Node.js (v18+)
-*   PostgreSQL (v14+)
-*   pnpm (recommended)
-
-### Database Setup
-1. Create a database named `fellowship_db`.
-2. Run the provided SQL migration scripts found in the `artifacts/fellowship_data_export.sql` or use the Drizzle push command.
-
-### Local Development
-
-**1. Backend:**
-```bash
-cd artifacts/api-server
-pnpm install
-# Configure .env with DATABASE_URL and RAZORPAY keys
-pnpm run dev
-```
-
-**2. Frontend:**
-```bash
-cd artifacts/fellowship-exam
-pnpm install
-pnpm run dev
-```
-
-## 🚢 Deployment
-
-The system is designed to be managed via **PM2**.
-
-1. Build the frontend: `npm run build` in `fellowship-exam`.
-2. Build the backend: `npm run build` in `api-server`.
-3. Start processes:
+### 1. Database Setup
+1. Create a new PostgreSQL database (e.g., `fellowship_db`).
+2. Import the provided SQL dump to restore the exact current state:
    ```bash
-   pm2 start dist/index.js --name fellowship-api
+   psql -U postgres -d fellowship_db -f artifacts/fellowship_data_export.sql
    ```
 
-## 🔒 Environment Variables
+### 2. Backend Configuration
+1. Navigate to `artifacts/api-server`.
+2. Create/edit `.env` file with your server details:
+   ```env
+   DATABASE_URL=postgresql://user:password@localhost:5432/fellowship_db
+   PORT=5000
+   JWT_SECRET=your_secret_key
+   ```
+3. Run `npm install` and `npm start` (or use PM2).
 
-Key variables required in `.env` files:
-*   `DATABASE_URL`: PostgreSQL connection string.
-*   `RAZORPAY_KEY_ID` / `RAZORPAY_KEY_SECRET`: For payment processing.
-*   `JWT_SECRET`: For secure authentication.
-*   `PRIVATE_OBJECT_DIR`: Local path for storing candidate uploads.
+### 3. Frontend Configuration
+1. Navigate to `artifacts/fellowship-exam`.
+2. Edit `.env` to point to your API URL:
+   ```env
+   VITE_API_URL=http://your-server-ip:5000/api
+   ```
+3. Run `npm install` and `npm run build`. Serve the `dist` folder using Nginx.
 
-## 📄 License
-Internal software for Sankara Academy of Vision. All rights reserved.
+## 📧 Email Settings
+Once deployed, log in as `super_admin` and navigate to **Email Settings** to configure your SMTP host and automated admission triggers.
+
+## 📺 Waiting Hall TV Display
+The live interview queue can be accessed publicly at the `/tv` route (e.g., `https://your-portal.com/tv`).
+
+---
+**Developed for July 2026 Batch.**

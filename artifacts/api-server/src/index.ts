@@ -149,17 +149,25 @@ async function runStartupFixes() {
 
   // Fix 2: ensure password hash is correct even if email was already updated
   const [existing] = await db.select().from(usersTable).where(eq(usersTable.email, "saravanan@sankaraeye.com"));
-  if (existing && existing.passwordHash !== SARAVANAN_PASSWORD_HASH) {
-    await db.update(usersTable)
-      .set({ passwordHash: SARAVANAN_PASSWORD_HASH })
-      .where(eq(usersTable.id, existing.id));
-    logger.info("Corrected super admin password hash for saravanan@sankaraeye.com");
+  if (existing) {
+    if (existing.passwordHash !== SARAVANAN_PASSWORD_HASH) {
+      await db.update(usersTable)
+        .set({ passwordHash: SARAVANAN_PASSWORD_HASH })
+        .where(eq(usersTable.id, existing.id));
+      logger.info("Corrected super admin password hash for saravanan@sankaraeye.com");
+    }
+  } else {
+    // Fix 3: Create the user if they don't exist at all
+    await db.insert(usersTable).values({
+      email: "saravanan@sankaraeye.com",
+      passwordHash: SARAVANAN_PASSWORD_HASH,
+      role: "super_admin",
+      fullName: "Saravanan",
+    });
+    logger.info("Created super admin saravanan@sankaraeye.com");
   }
 
-async function runStartupFixes() {
-  logger.info("Running startup fixes...");
-
-  // Aggressively update the July 2026 fellowship form to use the latest multi-specialty config
+  // Fix 4: Aggressively update the July 2026 fellowship form to use the latest multi-specialty config
   const [targetForm] = await db.select().from(applicationFormsTable).where(ilike(applicationFormsTable.title, "%July 2026%"));
   
   if (targetForm) {

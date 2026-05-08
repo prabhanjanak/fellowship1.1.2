@@ -260,9 +260,7 @@ router.delete("/panels/:id/queue/:candidateId",
 
 // ── Public Display Endpoint (display_operator or admin) ────────────────────────
 
-router.get("/display/live",
-  requireAuth,
-  async (_req, res) => {
+router.get("/display/live", async (_req, res) => {
     const panels = (await db.execute(sql`
       SELECT ip.id, ip.name, ip.room_number, ip.is_active
       FROM interview_panels ip

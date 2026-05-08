@@ -27,6 +27,7 @@ export const applicationFormsTable = pgTable("application_forms", {
 
 export const applicationSubmissionsTable = pgTable("application_submissions", {
   id: serial("id").primaryKey(),
+  candidateId: integer("candidate_id"),
   applicationId: uuid("application_id").defaultRandom().unique(),
   formId: integer("form_id").notNull(),
   saveAsDraft: boolean("save_as_draft").notNull().default(false),
@@ -86,6 +87,10 @@ export const applicationSubmissionsTable = pgTable("application_submissions", {
   declarationAccepted: boolean("declaration_accepted"),
   paymentUrl: text("payment_url"),
   photoUrl: text("photo_url"),
+  
+  paidAmount: integer("paid_amount"),
+  paymentId: text("payment_id"),
+  paymentMode: text("payment_mode"),
 
   customAnswers: jsonb("custom_answers").$type<Record<string, string>>().default({}),
 

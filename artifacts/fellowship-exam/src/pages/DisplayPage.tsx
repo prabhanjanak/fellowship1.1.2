@@ -1,9 +1,9 @@
 import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { api } from "@/lib/api";
-import { useAuth } from "@/contexts/AuthContext";
+import { api } from "../lib/api";
+import { useAuth } from "../contexts/AuthContext";
 import { Loader2, Monitor, CheckCircle2, Clock } from "lucide-react";
-import logoUrl from "@assets/seh_sav_logo_1777703794142.jpg";
+import logoUrl from "../assets/seh_sav_logo_1777703794142.jpg";
 
 interface QueueItem { candidateCode: string; }
 interface PanelDisplay {
@@ -167,3 +167,4 @@ function PanelCard({ panel }: { panel: PanelDisplay }) {
     </div>
   );
 }
+

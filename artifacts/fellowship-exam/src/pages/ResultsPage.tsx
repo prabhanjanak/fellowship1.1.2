@@ -1,7 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
-import { api } from "@/lib/api";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
+import { api } from "../lib/api";
+import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/card";
+import { Badge } from "../components/ui/badge";
 import { FileText, CheckCircle2, Clock } from "lucide-react";
 
 interface AttemptResult {
@@ -124,3 +124,4 @@ export default function ResultsPage() {
     </div>
   );
 }
+
