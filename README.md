@@ -1,4 +1,4 @@
-# Fellowship Examination & Admission Portal (v6)
+# Fellowship Examination & Admission Portal (v1.0.0)
 
 A professional, end-to-end management system for Fellowship programs, specifically tailored for the **Sankara Academy of Vision**.
 
