@@ -39,7 +39,7 @@ if (fs.existsSync(examDist)) {
   app.use(express.static(examDist));
 
   // Handle SPA routing: any non-API route serves index.html
-  app.get("/*", (req, res, next) => {
+  app.use((req, res, next) => {
     // Skip API and static objects
     if (req.path.startsWith("/api") || req.path.startsWith("/objects")) {
       return next();

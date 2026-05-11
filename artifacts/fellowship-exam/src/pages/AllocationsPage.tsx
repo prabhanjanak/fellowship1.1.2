@@ -59,7 +59,7 @@ export default function AllocationsPage() {
     .map((c: any) => {
       // Use actual interview average if available, otherwise fallback to 0
       const interviewAvg = c.interviewScore || 0;
-      
+      return {
         ...c,
         totalScore: (c.mcqScore || 0) + (c.psychometricScore || 0) + interviewAvg,
         interviewAvg,

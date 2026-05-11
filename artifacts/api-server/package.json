@@ -36,6 +36,7 @@
     "xlsx": "^0.18.5"
   },
   "devDependencies": {
+    "@esbuild/win32-x64": "^0.27.3",
     "@types/bcryptjs": "^3.0.0",
     "@types/cookie-parser": "^1.4.10",
     "@types/cors": "^2.8.19",
