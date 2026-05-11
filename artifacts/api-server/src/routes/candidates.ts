@@ -115,6 +115,14 @@ async function fullCandidate(c: typeof candidatesTable.$inferSelect) {
         mode: sub.paymentMode
       };
     })(),
+    centerPreference: await (async () => {
+      const [sub] = await db.select().from(applicationSubmissionsTable).where(eq(applicationSubmissionsTable.email, c.email));
+      return sub?.centerPreference ?? null;
+    })(),
+    reviewNotes: await (async () => {
+      const [sub] = await db.select().from(applicationSubmissionsTable).where(eq(applicationSubmissionsTable.email, c.email));
+      return sub?.reviewNotes ?? null;
+    })(),
   };
 }
 
@@ -185,6 +193,14 @@ router.get("/candidates", requireAuth, requireRole("super_admin", "program_admin
           mode: sub.paymentMode
         };
       })(),
+      centerPreference: (() => {
+        const sub = allSubmissions.find(s => s.email === c.email);
+        return sub?.centerPreference ?? null;
+      })(),
+      reviewNotes: (() => {
+        const sub = allSubmissions.find(s => s.email === c.email);
+        return sub?.reviewNotes ?? null;
+      })(),
     };
   });
   res.json(out);
@@ -223,6 +239,13 @@ router.patch("/candidates/:candidateId", requireAuth, requireRole("super_admin",
   const [updated] = await db.update(candidatesTable).set(update).where(eq(candidatesTable.id, id)).returning();
   if (!updated) { res.status(404).json({ error: "Not found" }); return; }
 
+  // Support updating reviewNotes on submission
+  if (body.reviewNotes !== undefined) {
+    await db.update(applicationSubmissionsTable)
+      .set({ reviewNotes: String(body.reviewNotes) })
+      .where(eq(applicationSubmissionsTable.email, updated.email));
+  }
+
   // Track seat matrix: increment on → allocated, decrement on allocated →
   const oldStatus = before.status;
   const newStatus = updated.status;
@@ -231,13 +254,20 @@ router.patch("/candidates/:candidateId", requireAuth, requireRole("super_admin",
     const allUnits = await db.select().from(unitsTable);
     const unitObj = updated.unitId ? allUnits.find((u) => u.id === updated.unitId) : null;
     const unitName = unitObj?.name ?? null;
-    const prefs = await db.select().from(candidatePreferencesTable).where(eq(candidatePreferencesTable.candidateId, id));
-    const firstPref = prefs.sort((a, b) => a.preferenceOrder - b.preferenceOrder)[0];
     let specialityName: string | null = null;
-    if (firstPref) {
-      const [spec] = await db.select().from(specialitiesTable).where(eq(specialitiesTable.id, firstPref.specialityId));
-      specialityName = spec?.name ?? null;
+    
+    // Extract speciality from reviewNotes if formatted like "Allocated to X"
+    if (body.reviewNotes && typeof body.reviewNotes === 'string' && body.reviewNotes.startsWith('Allocated to ')) {
+      specialityName = body.reviewNotes.replace('Allocated to ', '').trim();
+    } else {
+      const prefs = await db.select().from(candidatePreferencesTable).where(eq(candidatePreferencesTable.candidateId, id));
+      const firstPref = prefs.sort((a, b) => a.preferenceOrder - b.preferenceOrder)[0];
+      if (firstPref) {
+        const [spec] = await db.select().from(specialitiesTable).where(eq(specialitiesTable.id, firstPref.specialityId));
+        specialityName = spec?.name ?? null;
+      }
     }
+    
     if (unitName && specialityName) {
       await db.execute(sql`
         INSERT INTO seat_matrix_entries (speciality, unit_name, total_seats, allocated_seats)

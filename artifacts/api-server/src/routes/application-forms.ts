@@ -203,14 +203,49 @@ router.get(
       }
 
       baseRow["Where did you hear about this Fellowship?"] = s.referralSource ?? "";
+      baseRow["Mention the name of referred Faculty/Existing Trainee from Sankara"] = s.referredByName ?? "";
       baseRow["Degrees & Other Qualifications (Mention University name, passing month/year)"] = s.degree ?? "";
       baseRow["Medical College Qualified From"] = s.medicalCollege ?? "";
       baseRow["University from which Medical College is affiliated"] = s.university ?? "";
+      baseRow["Postgraduate Qualifications"] = s.pgQualifications ?? "";
+      baseRow["Qualification [DO (Diploma Ophthlmology)]"] = s.doQualification ? "Yes" : "No";
+      baseRow["If DO then College & University Qualified from and year of Qualification"] = s.doDetails ?? "";
+      baseRow["Qualification [MS/MD ( Masters in Ophthalmology)]"] = s.msMdQualification ? "Yes" : "No";
+      baseRow["If MS then College & University Qualified from and year of Qualification"] = s.msMdDetails ?? "";
+      baseRow["Qualification [DNB]"] = s.dnbQualification ? "Yes" : "No";
+      baseRow["If DNB then institution completed from and year of Qualification"] = s.dnbDetails ?? "";
+      baseRow["Any Other Training / Certification undertaken"] = s.otherTraining ?? "";
       baseRow["Medical Council Registration Number (MCI)"] = s.medicalCouncilNumber ?? "";
+      
+      let diagnosticParsed = {};
+      try { diagnosticParsed = JSON.parse(s.diagnosticSkills ?? "{}"); } catch {}
+      for (const [k, v] of Object.entries(diagnosticParsed)) {
+        baseRow[`Perform & Interpret Diagnostics [${k}]`] = v;
+      }
+      
+      let surgicalParsed = {};
+      try { surgicalParsed = JSON.parse(s.surgicalExperience ?? "{}"); } catch {}
+      for (const [k, v] of Object.entries(surgicalParsed)) {
+        baseRow[`Approximate No of ${k} (Under Supervision)`] = (v as any)?.supervision ?? "";
+        baseRow[`Approximate No of ${k} (Independently)`] = (v as any)?.independent ?? "";
+      }
+      
+      baseRow["Total No of Surgeries performed till date"] = s.totalSurgeries ?? "";
       baseRow["Publications"] = s.publications ?? "";
       baseRow["Presentations"] = s.presentations ?? "";
       baseRow["Letter of recommendation 1"] = s.lor1Url ?? "";
+      baseRow["LOR 1 Name & Designation"] = s.lor1RefName ?? "";
+      baseRow["LOR 1 Contact"] = s.lor1RefContact ?? "";
+      baseRow["LOR 1 Email"] = s.lor1RefEmail ?? "";
       baseRow["Letter of recommendation 2"] = s.lor2Url ?? "";
+      baseRow["LOR 2 Name & Designation"] = s.lor2RefName ?? "";
+      baseRow["LOR 2 Contact"] = s.lor2RefContact ?? "";
+      baseRow["LOR 2 Email"] = s.lor2RefEmail ?? "";
+      
+      baseRow["If Married Spouse Details(Name & Profession)"] = s.spouseDetails ?? "";
+      baseRow["Medical Conditions Declaration"] = s.healthDeclaration ?? "";
+      baseRow["Other pertinent information"] = s.otherInformation ?? "";
+      
       baseRow["Passport size photograph"] = s.photoUrl ?? "";
       baseRow["Transaction ID/ UTR No"] = s.paymentUrl ?? "";
       baseRow["Status"] = s.status;

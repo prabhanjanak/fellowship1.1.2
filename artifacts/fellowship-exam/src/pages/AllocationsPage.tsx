@@ -60,12 +60,15 @@ export default function AllocationsPage() {
       // Use actual interview average if available, otherwise fallback to 0
       const interviewAvg = c.interviewScore || 0;
       
-      return {
         ...c,
         totalScore: (c.mcqScore || 0) + (c.psychometricScore || 0) + interviewAvg,
         interviewAvg,
-        // Use actual preferences from the candidate object
-        preferences: c.specializations || []
+        preferences: c.specializations || [],
+        parsedCenterPreference: (() => {
+          try {
+            return typeof c.centerPreference === 'string' ? JSON.parse(c.centerPreference) : c.centerPreference || {};
+          } catch(e) { return {}; }
+        })()
       };
     })
     .sort((a: any, b: any) => (b.totalScore || 0) - (a.totalScore || 0));
@@ -128,7 +131,10 @@ export default function AllocationsPage() {
       "Psych Score": c.psychometricScore || 0,
       "Interview Score": c.interviewAvg.toFixed(2),
       "Total Score": c.totalScore.toFixed(2),
-      "Preferences": c.preferences.join(", "),
+      "Preferences": c.preferences.map((p: string) => {
+         const units = c.parsedCenterPreference[p];
+         return `${p} ${Array.isArray(units) && units.length ? `(${units.join(', ')})` : ''}`;
+      }).join("; "),
       "Current Status": c.status,
       "Allocated Specialization": c.status === 'allocated' ? c.reviewNotes?.replace('Allocated to ', '') : 'Pending'
     }));
@@ -250,24 +256,33 @@ export default function AllocationsPage() {
                       </TableCell>
                       <TableCell>
                         <div className="flex flex-col gap-1">
-                          {c.preferences.slice(0, 3).map((p: string, i: number) => (
-                            <div key={i} className="flex items-center gap-1.5 group">
-                              <Badge variant={p === allocatedSpec ? "default" : "outline"} className={`text-[9px] h-4 px-1 ${p === allocatedSpec ? "bg-emerald-600" : "text-muted-foreground"}`}>
-                                {i + 1}
-                              </Badge>
-                              <span className={`text-[11px] ${p === allocatedSpec ? "font-bold text-emerald-700" : "text-slate-600"}`}>
-                                {p}
-                              </span>
-                              {!isAllocated && (occupancy[p] || 0) < (SEAT_MATRIX[p] || 0) && (
-                                <button 
-                                  onClick={() => allocationMutation.mutate({ id: c.id, specialization: p })}
-                                  className="hidden group-hover:flex items-center text-[10px] text-emerald-600 font-bold hover:underline"
-                                >
-                                  <CheckCircle2 className="h-3 w-3 mr-0.5" /> Allocate
-                                </button>
+                          {c.preferences.slice(0, 3).map((p: string, i: number) => {
+                            const preferredUnits = c.parsedCenterPreference[p];
+                            return (
+                            <div key={i} className="flex flex-col gap-0.5 group">
+                              <div className="flex items-center gap-1.5">
+                                <Badge variant={p === allocatedSpec ? "default" : "outline"} className={`text-[9px] h-4 px-1 ${p === allocatedSpec ? "bg-emerald-600" : "text-muted-foreground"}`}>
+                                  {i + 1}
+                                </Badge>
+                                <span className={`text-[11px] ${p === allocatedSpec ? "font-bold text-emerald-700" : "text-slate-600"}`}>
+                                  {p}
+                                </span>
+                                {!isAllocated && (occupancy[p] || 0) < (SEAT_MATRIX[p] || 0) && (
+                                  <button 
+                                    onClick={() => allocationMutation.mutate({ id: c.id, specialization: p })}
+                                    className="hidden group-hover:flex items-center text-[10px] text-emerald-600 font-bold hover:underline"
+                                  >
+                                    <CheckCircle2 className="h-3 w-3 mr-0.5" /> Allocate
+                                  </button>
+                                )}
+                              </div>
+                              {Array.isArray(preferredUnits) && preferredUnits.length > 0 && (
+                                <div className="text-[9px] text-muted-foreground ml-6">
+                                  📍 {preferredUnits.join(", ")}
+                                </div>
                               )}
                             </div>
-                          ))}
+                          )})}
                         </div>
                       </TableCell>
                       <TableCell className="text-right">

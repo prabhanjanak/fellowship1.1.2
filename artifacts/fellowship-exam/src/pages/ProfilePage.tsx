@@ -8,8 +8,8 @@ import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
 import { Label } from "../components/ui/label";
 import { Alert, AlertDescription } from "../components/ui/alert";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "../components/ui/dialog";
-import { KeyRound, Eye, EyeOff, CheckCircle2, Building2, BadgeCheck, Briefcase } from "lucide-react";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "../components/ui/dialog";
+import { KeyRound, Eye, EyeOff, CheckCircle2, Building2, BadgeCheck, Briefcase, Database, AlertTriangle } from "lucide-react";
 import { useToast } from "../hooks/use-toast";
 import { RoleAvatar } from "../components/RoleAvatar";
 
@@ -136,9 +136,70 @@ function ChangePasswordDialog({ open, onClose }: { open: boolean; onClose: () =>
   );
 }
 
+function ResetDatabaseDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
+  const { logout } = useAuth();
+  const { toast } = useToast();
+  const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+
+  const reset = () => { setPassword(""); setError(""); };
+
+  const handleSubmit = async () => {
+    setError("");
+    setLoading(true);
+    try {
+      await api.post("/debug/reset-database", { password });
+      toast({ title: "Database Reset Complete", description: "All application data has been deleted." });
+      reset();
+      onClose();
+      logout();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to reset database");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={(o) => { if (!o) { reset(); onClose(); } }}>
+      <DialogContent className="max-w-sm">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2 text-destructive">
+            <Database className="h-5 w-5" /> Factory Reset Database
+          </DialogTitle>
+          <DialogDescription>
+            This action is <strong>irreversible</strong>. All candidates, applications, and seat matrices will be permanently deleted. Your admin account will be preserved.
+          </DialogDescription>
+        </DialogHeader>
+        <div className="space-y-3 py-2">
+          {error && <Alert variant="destructive"><AlertDescription>{error}</AlertDescription></Alert>}
+          <div className="space-y-1.5">
+            <Label>Enter Super Admin Password</Label>
+            <div className="relative">
+              <Input type={showPassword ? "text" : "password"} value={password} onChange={(e) => setPassword(e.target.value)} className="pr-10" />
+              <button type="button" className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground" onClick={() => setShowPassword(!showPassword)}>
+                {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+              </button>
+            </div>
+          </div>
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={() => { reset(); onClose(); }}>Cancel</Button>
+          <Button variant="destructive" disabled={loading || !password} onClick={handleSubmit}>
+            {loading ? "Resetting…" : "Confirm Reset"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 export default function ProfilePage() {
   const { user } = useAuth();
   const [changePasswordOpen, setChangePasswordOpen] = useState(false);
+  const [resetDatabaseOpen, setResetDatabaseOpen] = useState(false);
 
   const { data: profile, isLoading, error } = useQuery<CandidateProfile>({
     queryKey: ["candidate-profile"],
@@ -156,9 +217,16 @@ export default function ProfilePage() {
           <h1 className="text-2xl font-bold">My Profile</h1>
           <p className="text-muted-foreground text-sm mt-1">{user?.email}</p>
         </div>
-        <Button variant="outline" size="sm" className="gap-2" onClick={() => setChangePasswordOpen(true)}>
-          <KeyRound className="h-4 w-4" /> Change Password
-        </Button>
+        <div className="flex gap-2">
+          {user?.role === "super_admin" && (
+            <Button variant="destructive" size="sm" className="gap-2" onClick={() => setResetDatabaseOpen(true)}>
+              <AlertTriangle className="h-4 w-4" /> Reset Database
+            </Button>
+          )}
+          <Button variant="outline" size="sm" className="gap-2" onClick={() => setChangePasswordOpen(true)}>
+            <KeyRound className="h-4 w-4" /> Change Password
+          </Button>
+        </div>
       </div>
 
       {/* Staff Profile Card with Avatar */}
@@ -272,6 +340,7 @@ export default function ProfilePage() {
       )}
 
       <ChangePasswordDialog open={changePasswordOpen} onClose={() => setChangePasswordOpen(false)} />
+      <ResetDatabaseDialog open={resetDatabaseOpen} onClose={() => setResetDatabaseOpen(false)} />
     </div>
   );
 }

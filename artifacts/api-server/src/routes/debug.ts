@@ -2,6 +2,8 @@ import { Router } from "express";
 import { db, usersTable, candidatesTable, applicationFormsTable, programsTable, applicationSubmissionsTable, batchesTable, batchCandidatesTable, seatMatrixEntriesTable } from "@workspace/db";
 import { eq, sql } from "drizzle-orm";
 import { logger } from "../lib/logger";
+import { requireAuth, requireRole } from "../middleware/auth";
+import { comparePassword } from "../lib/auth";
 
 const router = Router();
 
@@ -89,6 +91,46 @@ router.post("/debug/seed", async (req, res) => {
     res.json({ message: "Seed completed successfully" });
   } catch (error) {
     logger.error({ error }, "Seed failed");
+    res.status(500).json({ error: (error as Error).message });
+  }
+});
+
+router.post("/debug/reset-database", requireAuth, requireRole("super_admin"), async (req, res) => {
+  try {
+    const { password } = req.body as { password?: string };
+    if (!password) {
+      res.status(400).json({ error: "Password is required to reset the database" });
+      return;
+    }
+
+    // Verify password
+    const userId = req.user!.userId;
+    const [user] = await db.select().from(usersTable).where(eq(usersTable.id, userId));
+    if (!user) {
+      res.status(404).json({ error: "User not found" });
+      return;
+    }
+
+    const ok = await comparePassword(password, user.passwordHash);
+    if (!ok) {
+      res.status(401).json({ error: "Incorrect password. Database reset aborted." });
+      return;
+    }
+
+    logger.info(`Database reset requested by super_admin ${user.email}`);
+
+    // Proceed to delete all non-user data
+    await db.delete(batchCandidatesTable);
+    await db.delete(batchesTable);
+    await db.delete(applicationSubmissionsTable);
+    await db.delete(candidatesTable);
+    await db.delete(applicationFormsTable);
+    await db.delete(seatMatrixEntriesTable);
+    await db.delete(programsTable);
+
+    res.json({ message: "Database has been reset successfully." });
+  } catch (error) {
+    logger.error({ error }, "Database reset failed");
     res.status(500).json({ error: (error as Error).message });
   }
 });
