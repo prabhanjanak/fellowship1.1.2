@@ -1477,6 +1477,39 @@ router.post("/apply/:token", async (req, res) => {
   res.status(201).json({ success: true, submissionId: sub!.id });
 });
 
+// Admin: Manually create a submission
+router.post(
+  "/application-submissions",
+  requireAuth,
+  requireRole("super_admin", "program_admin", "central_exam_coordinator", "exam_coordinator"),
+  async (req, res) => {
+    try {
+      const body = req.body;
+      const subData: any = {
+        ...body,
+        submittedAt: new Date(),
+        source: "admin_manual",
+        status: body.status || "pending",
+        readyForReview: true
+      };
+
+      // Ensure JSON fields are handled
+      const jsonFields = ['specialization', 'centerPreference', 'customAnswers', 'diagnosticSkills', 'surgicalExperience', 'qualificationMatrix', 'medicalConditions'];
+      jsonFields.forEach(field => {
+        if (subData[field] && typeof subData[field] === 'object') {
+          subData[field] = JSON.stringify(subData[field]);
+        }
+      });
+
+      const [sub] = await db.insert(applicationSubmissionsTable).values(subData).returning();
+      res.status(201).json(sub);
+    } catch (error: any) {
+      console.error("[manual_submission] error:", error);
+      res.status(500).json({ error: error.message });
+    }
+  }
+);
+
 
 // Admin: delete submission
 router.delete(

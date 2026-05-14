@@ -814,6 +814,27 @@ export default function ApplicationFormsPage() {
   const [statusFilter, setStatusFilter] = useState<"all" | "ready" | "pending" | "approved" | "rejected">("all");
   const [selectedIds, setSelectedIds] = useState<number[]>([]);
 
+  // Manual submission state
+  const [manualEntryOpen, setManualEntryOpen] = useState(false);
+  const [manualEntryData, setManualEntryData] = useState<any>({
+    fullName: "",
+    email: "",
+    phone: "",
+    specialization: "",
+    status: "pending"
+  });
+
+  const createManualSubmission = useMutation({
+    mutationFn: (data: any) => api.post(`/application-submissions`, { ...data, formId: viewFormId }),
+    onSuccess: () => {
+      toast({ title: "Submission created" });
+      qc.invalidateQueries({ queryKey: ["submissions", viewFormId] });
+      setManualEntryOpen(false);
+      setManualEntryData({ fullName: "", email: "", phone: "", specialization: "", status: "pending" });
+    },
+    onError: (e: Error) => toast({ title: "Error", description: e.message, variant: "destructive" }),
+  });
+
   const { data: forms = [], isLoading } = useQuery<ApplicationForm[]>({
     queryKey: ["application-forms"],
     queryFn: () => api.get<ApplicationForm[]>("/application-forms"),
@@ -1410,7 +1431,8 @@ export default function ApplicationFormsPage() {
         </div>
 
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-           <div className="flex gap-1.5 p-1 bg-slate-100 rounded-2xl w-fit">
+           <div className="flex items-center gap-4 flex-wrap">
+            <div className="flex gap-1.5 p-1 bg-slate-100 rounded-2xl w-fit">
              {(["all", "ready", "pending", "approved", "rejected"] as const).map((f) => (
                <Button 
                  key={f} 
@@ -2251,6 +2273,81 @@ export default function ApplicationFormsPage() {
           )}
           <DialogFooter>
             <Button onClick={() => { setCreatedForm(null); setCreatedFormGsOpen(false); }}>Done</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Manual Entry Dialog */}
+      <Dialog open={manualEntryOpen} onOpenChange={setManualEntryOpen}>
+        <DialogContent className="max-w-xl rounded-3xl">
+          <DialogHeader>
+            <DialogTitle className="text-xl font-black text-slate-900">Manual Entry</DialogTitle>
+            <p className="text-sm text-muted-foreground mt-1">Directly add a candidate submission to this form.</p>
+          </DialogHeader>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-5 py-4">
+            <div className="space-y-1.5">
+              <Label className="text-xs font-bold uppercase tracking-wider text-slate-500">Full Name</Label>
+              <Input 
+                value={manualEntryData.fullName} 
+                onChange={e => setManualEntryData({...manualEntryData, fullName: e.target.value})}
+                placeholder="John Doe"
+                className="rounded-xl border-slate-200"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs font-bold uppercase tracking-wider text-slate-500">Email Address</Label>
+              <Input 
+                value={manualEntryData.email} 
+                onChange={e => setManualEntryData({...manualEntryData, email: e.target.value})}
+                placeholder="john@example.com"
+                className="rounded-xl border-slate-200"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs font-bold uppercase tracking-wider text-slate-500">Phone Number</Label>
+              <Input 
+                value={manualEntryData.phone} 
+                onChange={e => setManualEntryData({...manualEntryData, phone: e.target.value})}
+                placeholder="10 digit mobile"
+                className="rounded-xl border-slate-200"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs font-bold uppercase tracking-wider text-slate-500">Status</Label>
+              <Select 
+                value={manualEntryData.status} 
+                onValueChange={v => setManualEntryData({...manualEntryData, status: v})}
+              >
+                <SelectTrigger className="rounded-xl border-slate-200">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent className="rounded-xl">
+                  <SelectItem value="pending">Pending</SelectItem>
+                  <SelectItem value="approved">Approved</SelectItem>
+                  <SelectItem value="rejected">Rejected</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="md:col-span-2 space-y-1.5">
+              <Label className="text-xs font-bold uppercase tracking-wider text-slate-500">Specialization</Label>
+              <Input 
+                value={manualEntryData.specialization} 
+                onChange={e => setManualEntryData({...manualEntryData, specialization: e.target.value})}
+                placeholder='e.g. ["Cornea", "Retina"]'
+                className="rounded-xl border-slate-200 font-mono"
+              />
+              <p className="text-[10px] text-muted-foreground mt-1">Enter as a JSON array or comma-separated list.</p>
+            </div>
+          </div>
+          <DialogFooter className="gap-3">
+            <Button variant="ghost" className="rounded-xl font-bold" onClick={() => setManualEntryOpen(false)}>Cancel</Button>
+            <Button 
+              className="rounded-xl bg-orange-600 hover:bg-orange-700 font-black uppercase tracking-widest text-[10px] h-10 px-6 shadow-orange-200 shadow-lg"
+              disabled={createManualSubmission.isPending || !manualEntryData.fullName || !manualEntryData.email}
+              onClick={() => createManualSubmission.mutate(manualEntryData)}>
+              {createManualSubmission.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4 mr-2" />}
+              Create Submission
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
