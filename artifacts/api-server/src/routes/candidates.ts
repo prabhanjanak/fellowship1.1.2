@@ -26,6 +26,7 @@ import { emailSettingsTable, applicationFormsTable, batchesTable, batchCandidate
 import PDFDocument from "pdfkit";
 import path from "path";
 import fs from "fs/promises";
+import { parseSpecializationString } from "../lib/utils";
 
 const router: Router = Router();
 
@@ -83,17 +84,38 @@ async function fullCandidate(c: typeof candidatesTable.$inferSelect) {
     qualification: c.qualification,
     collegeName: c.collegeName,
     address: c.address,
-    preferences: prefs.sort((a, b) => a.preferenceOrder - b.preferenceOrder).map((p) => {
-      const sp = specs.find((s) => s.id === p.specialityId);
-      const pg = sp ? programs.find((g) => g.id === sp.programId) : null;
-      return {
-        id: p.id,
-        specialityId: p.specialityId,
-        specialityName: sp?.name ?? "",
-        programName: pg?.name ?? "",
-        preferenceOrder: p.preferenceOrder,
-      };
-    }),
+    preferences: await (async () => {
+      let resolvedPrefs = prefs.sort((a, b) => a.preferenceOrder - b.preferenceOrder).map((p) => {
+        const sp = specs.find((s) => s.id === p.specialityId);
+        const pg = sp ? programs.find((g) => g.id === sp.programId) : null;
+        return {
+          id: p.id,
+          specialityId: p.specialityId,
+          specialityName: sp?.name ?? "",
+          programName: pg?.name ?? "",
+          preferenceOrder: p.preferenceOrder,
+        };
+      });
+
+      if (resolvedPrefs.length === 0) {
+        const [sub] = await db.select().from(applicationSubmissionsTable).where(eq(applicationSubmissionsTable.email, c.email));
+        if (sub && sub.specialization) {
+          const parsedSpecs = parseSpecializationString(sub.specialization);
+          resolvedPrefs = parsedSpecs.map((specName, index) => {
+            const sp = specs.find((s) => s.name.toLowerCase() === specName.toLowerCase());
+            const pg = sp ? programs.find((g) => g.id === sp.programId) : null;
+            return {
+              id: -(index + 1), // virtual ID
+              specialityId: sp?.id ?? 0,
+              specialityName: sp?.name ?? specName,
+              programName: pg?.name ?? "",
+              preferenceOrder: index + 1,
+            };
+          });
+        }
+      }
+      return resolvedPrefs;
+    })(),
     documents: docs.map((d) => ({
       id: d.id,
       docType: d.docType,
@@ -118,7 +140,7 @@ async function fullCandidate(c: typeof candidatesTable.$inferSelect) {
       const [sub] = await db.select().from(applicationSubmissionsTable).where(eq(applicationSubmissionsTable.email, c.email));
       if (!sub) return null;
       return {
-        amount: sub.paidAmount ? sub.paidAmount / 100 : null,
+        amount: sub.paidAmount ? (sub.paidAmount > 100000 ? sub.paidAmount / 100 : sub.paidAmount) : null,
         id: sub.paymentId,
         mode: sub.paymentMode
       };
@@ -179,9 +201,15 @@ router.get("/candidates", requireAuth, requireRole("super_admin", "program_admin
     const prefs = allPrefs
       .filter((p) => p.candidateId === c.id)
       .sort((a, b) => a.preferenceOrder - b.preferenceOrder);
-    const specializations = prefs
+    let specializations = prefs
       .map((p) => allSpecs.find((s) => s.id === p.specialityId)?.name ?? "")
       .filter(Boolean);
+    if (specializations.length === 0) {
+      const sub = allSubmissions.find(s => s.email?.toLowerCase() === c.email?.toLowerCase());
+      if (sub && sub.specialization) {
+        specializations = parseSpecializationString(sub.specialization);
+      }
+    }
     const documents = allDocs
       .filter((d) => d.candidateId === c.id)
       .map((d) => ({ id: d.id, docType: d.docType, fileName: d.fileName, fileUrl: d.fileUrl }));
@@ -203,28 +231,28 @@ router.get("/candidates", requireAuth, requireRole("super_admin", "program_admin
       rank: null,
       createdAt: c.createdAt.toISOString(),
       paymentInfo: (() => {
-        const sub = allSubmissions.find(s => s.email === c.email);
+        const sub = allSubmissions.find(s => s.email?.toLowerCase() === c.email?.toLowerCase());
         if (!sub) return null;
         return {
-          amount: sub.paidAmount ? sub.paidAmount / 100 : null,
+          amount: sub.paidAmount ? (sub.paidAmount > 100000 ? sub.paidAmount / 100 : sub.paidAmount) : null,
           id: sub.paymentId,
           mode: sub.paymentMode
         };
       })(),
       centerPreference: (() => {
-        const sub = allSubmissions.find(s => s.email === c.email);
+        const sub = allSubmissions.find(s => s.email?.toLowerCase() === c.email?.toLowerCase());
         return sub?.centerPreference ?? null;
       })(),
       submissionId: (() => {
-        const sub = allSubmissions.find(s => s.email === c.email);
+        const sub = allSubmissions.find(s => s.email?.toLowerCase() === c.email?.toLowerCase());
         return sub?.id ?? null;
       })(),
       reviewNotes: (() => {
-        const sub = allSubmissions.find(s => s.email === c.email);
+        const sub = allSubmissions.find(s => s.email?.toLowerCase() === c.email?.toLowerCase());
         return sub?.reviewNotes ?? null;
       })(),
       pgQualifications: (() => {
-        const sub = allSubmissions.find(s => s.email === c.email);
+        const sub = allSubmissions.find(s => s.email?.toLowerCase() === c.email?.toLowerCase());
         return sub?.pgQualifications ?? null;
       })(),
     };

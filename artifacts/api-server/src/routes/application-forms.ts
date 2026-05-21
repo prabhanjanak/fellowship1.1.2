@@ -11,6 +11,7 @@ import fs from "fs/promises";
 import { createWriteStream } from "fs";
 import path from "path";
 import PDFDocument from "pdfkit";
+import { parseSpecializationString } from "../lib/utils";
 
 const router: Router = Router();
 
@@ -43,6 +44,7 @@ router.get(
       const doc = new PDFDocument({ 
         margin: 50, 
         size: 'A4',
+        bufferPages: true,
         info: { Title: `Application - ${sub.fullName}`, Author: 'Sankara Academy of Vision' }
       });
       const filename = `Application_${sub.fullName.replace(/\s+/g, '_')}_${id}.pdf`;
@@ -52,36 +54,47 @@ router.get(
       doc.pipe(res);
 
       // --- PDF THEME & HELPERS ---
-      const colors = {
-        primary: '#0f172a',    // Slate 900
-        secondary: '#475569',  // Slate 600
-        accent: '#2563eb',     // Blue 600
-        muted: '#94a3b8',      // Slate 400
-        border: '#e2e8f0'      // Slate 200
-      };
+      const colors = { primary: '#0f172a', secondary: '#475569', accent: '#2563eb', muted: '#94a3b8', border: '#e2e8f0' };
 
       const drawSectionHeader = (title: string) => {
-        doc.moveDown(1.5);
+        if (doc.y > 680) {
+          doc.addPage();
+          doc.y = 50;
+        }
+        doc.moveDown(1);
         const y = doc.y;
-        doc.rect(50, y, 500, 20).fill('#f8fafc');
-        doc.fillColor(colors.primary).font('Helvetica-Bold').fontSize(11).text(title.toUpperCase(), 60, y + 5);
-        doc.strokeColor(colors.border).lineWidth(0.5).moveTo(50, y + 20).lineTo(550, y + 20).stroke();
-        doc.moveDown(0.8);
+        doc.rect(50, y, 500, 24).fill('#f1f5f9');
+        doc.fillColor(colors.primary).font('Helvetica-Bold').fontSize(12.5).text(title.toUpperCase(), 60, y + 6, { width: 480 });
+        doc.strokeColor(colors.border).lineWidth(0.5).moveTo(50, y + 24).lineTo(550, y + 24).stroke();
+        doc.y = y + 32;
       };
 
-      const renderRow = (label: string, value: any, options: { width?: number; continued?: boolean } = {}) => {
-        const valText = (value === null || value === undefined || value === "null") ? "—" : String(value);
-        doc.fillColor(colors.secondary).font('Helvetica-Bold').fontSize(8).text(label.toUpperCase(), { continued: true });
-        doc.fillColor(colors.primary).font('Helvetica').fontSize(10).text(` : ${valText}`, options);
+      const renderApplicationRecordRow = (label: string, value: any) => {
+        const valText = (value === null || value === undefined || value === "null" || value === "") ? "—" : String(value);
+        const startY = doc.y;
+        doc.fillColor(colors.secondary).font('Helvetica-Bold').fontSize(10.5).text(label.toUpperCase(), 50, startY, { width: 120, lineGap: 2 });
+        const labelEndY = doc.y;
+        doc.fillColor(colors.primary).font('Helvetica').fontSize(11.5).text(`: ${valText}`, 180, startY, { width: 250, lineGap: 2 });
+        const valueEndY = doc.y;
+        doc.y = Math.max(labelEndY, valueEndY) + 5;
+      };
+
+      const renderGeneralRow = (label: string, value: any) => {
+        const valText = (value === null || value === undefined || value === "null" || value === "") ? "—" : String(value);
+        if (doc.y > 720) {
+          doc.addPage();
+          doc.y = 50;
+        }
+        const currentY = doc.y;
+        doc.fillColor(colors.secondary).font('Helvetica-Bold').fontSize(10.5).text(label.toUpperCase(), 50, currentY, { width: 160, lineGap: 2 });
+        const labelEndY = doc.y;
+        doc.fillColor(colors.primary).font('Helvetica').fontSize(11.5).text(`: ${valText}`, 220, currentY, { width: 330, lineGap: 2 });
+        const valueEndY = doc.y;
+        doc.y = Math.max(labelEndY, valueEndY) + 6;
       };
 
       const parseSpecializations = (spec: string | null | undefined): string[] => {
-        if (!spec) return [];
-        try {
-          const parsed = JSON.parse(spec);
-          if (Array.isArray(parsed)) return parsed.map(String).filter(Boolean);
-        } catch { }
-        return spec.split(",").map((s) => s.trim()).filter(Boolean);
+        return parseSpecializationString(spec);
       };
 
       const parseCenterPreferences = (cp: string | null | undefined, customAnswers?: any, sections?: any[]): Record<string, string> => {
@@ -111,67 +124,86 @@ router.get(
         return {};
       };
 
-      // --- HEADER ---
-      doc.fillColor(colors.accent).font('Helvetica-Bold').fontSize(22).text('SANKARA ACADEMY OF VISION', { align: 'left' });
-      doc.fillColor(colors.primary).font('Helvetica').fontSize(10).text('Educational unit of Sankara Eye Foundation, India', { align: 'left' });
+      // Header
+      doc.fillColor(colors.accent).font('Helvetica-Bold').fontSize(24).text('SANKARA ACADEMY OF VISION', 50, 50, { width: 500, align: 'left' });
+      doc.fillColor(colors.primary).font('Helvetica').fontSize(11).text('Educational unit of Sankara Eye Foundation, India', 50, 75, { width: 500, align: 'left' });
       doc.moveDown(0.2);
-      doc.fillColor(colors.muted).fontSize(9).text('FELLOWSHIP PROGRAM ADMISSIONS', { align: 'left' });
-      
-      doc.strokeColor(colors.accent).lineWidth(2).moveTo(50, doc.y + 10).lineTo(550, doc.y + 10).stroke();
-      doc.moveDown(2);
+      doc.fillColor(colors.muted).font('Helvetica-Bold').fontSize(10).text('FELLOWSHIP PROGRAM ADMISSIONS', 50, 90, { width: 500, align: 'left' });
+      doc.strokeColor(colors.accent).lineWidth(2).moveTo(50, 105).lineTo(550, 105).stroke();
 
-      // --- CANDIDATE PHOTO ---
+      // Photo on the right
       const photoUrl = sub.photoUrl;
+      const photoX = 450;
+      const photoY = 120;
+      const photoW = 100;
+      const photoH = 120;
+
       if (photoUrl && photoUrl.startsWith("/objects/")) {
         const localPath = path.join(process.cwd(), "uploads", photoUrl.replace("/objects/", ""));
         try {
-          doc.image(localPath, 460, 120, { width: 90, height: 110 });
-          doc.rect(460, 120, 90, 110).strokeColor(colors.border).lineWidth(1).stroke();
+          doc.image(localPath, photoX, photoY, { width: photoW, height: photoH });
+          doc.rect(photoX, photoY, photoW, photoH).strokeColor(colors.border).lineWidth(1).stroke();
         } catch (e) {
-          doc.rect(460, 120, 90, 110).fill('#f1f5f9');
-          doc.fillColor(colors.muted).fontSize(8).text('PHOTO NOT AVAILABLE', 465, 165, { width: 80, align: 'center' });
+          doc.rect(photoX, photoY, photoW, photoH).fill('#f1f5f9');
+          doc.fillColor(colors.muted).font('Helvetica').fontSize(8.5).text('PHOTO NOT AVAILABLE', photoX, photoY + 50, { width: photoW, align: 'center' });
         }
       } else {
-        doc.rect(460, 120, 90, 110).fill('#f1f5f9');
-        doc.fillColor(colors.muted).fontSize(8).text('NO PHOTO UPLOADED', 465, 165, { width: 80, align: 'center' });
+        doc.rect(photoX, photoY, photoW, photoH).fill('#f1f5f9');
+        doc.fillColor(colors.muted).font('Helvetica').fontSize(8.5).text('NO PHOTO UPLOADED', photoX, photoY + 50, { width: photoW, align: 'center' });
       }
 
-      // --- BASIC INFO ---
-      doc.y = 120; // Align with photo top
-      doc.fillColor(colors.accent).font('Helvetica-Bold').fontSize(14).text('APPLICATION RECORD');
-      doc.moveDown(0.5);
-      renderRow('Application ID', id);
-      renderRow('Program', program?.name || 'Fellowship Program');
-      renderRow('Submission Date', sub.submittedAt ? new Date(sub.submittedAt).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : 'N/A');
-      renderRow('Status', sub.status.toUpperCase());
+      doc.y = 120;
+      doc.fillColor(colors.accent).font('Helvetica-Bold').fontSize(14).text('APPLICATION RECORD', 50, 120, { width: 380 });
+      doc.y = 145; // Give standard padding from title
+
+      renderApplicationRecordRow('Application ID', id);
+      renderApplicationRecordRow('Program', program?.name || 'Fellowship Program');
+      renderApplicationRecordRow('Submission Date', sub.submittedAt ? new Date(sub.submittedAt).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : '—');
+      renderApplicationRecordRow('Status', sub.status.toUpperCase());
       
+      // Ensure vertical cursor is below the photo height before starting section headers to prevent overlapping
+      if (doc.y < 250) {
+        doc.y = 250;
+      }
+
       drawSectionHeader('Personal Details');
-      renderRow('Full Name', sub.fullName);
-      renderRow('Email Address', sub.email);
-      renderRow('Phone Number', sub.phone);
-      renderRow('Date of Birth', sub.dateOfBirth);
-      renderRow('Gender', (sub as any).gender);
-      renderRow('Marital Status', sub.maritalStatus);
-      renderRow('Permanent Address', sub.permanentAddress);
+      renderGeneralRow('Full Name', sub.fullName);
+      renderGeneralRow('Email Address', sub.email);
+      renderGeneralRow('Phone Number', sub.phone);
+      renderGeneralRow('Date of Birth', sub.dateOfBirth);
+      renderGeneralRow('Gender', (sub as any).gender);
+      renderGeneralRow('Marital Status', sub.maritalStatus);
+      renderGeneralRow('Permanent Address', sub.permanentAddress);
 
       drawSectionHeader('Academic & Professional Qualifications');
-      renderRow('Basic Degree', sub.degree);
-      renderRow('Medical College', sub.medicalCollege);
-      renderRow('University', sub.university);
-      renderRow('PG Qualifications', sub.pgQualifications);
-      renderRow('Medical Council Reg No', sub.medicalCouncilNumber);
+      renderGeneralRow('Basic Degree', sub.degree);
+      renderGeneralRow('Medical College', sub.medicalCollege);
+      renderGeneralRow('University', sub.university);
+      renderGeneralRow('PG Qualifications', sub.pgQualifications);
+      renderGeneralRow('Medical Council Reg No', sub.medicalCouncilNumber);
 
       drawSectionHeader('Specialization & Center Preferences');
       const specs = parseSpecializations(sub.specialization);
       const centerPrefs = parseCenterPreferences(sub.centerPreference, sub.customAnswers, form?.sectionsConfig ?? undefined);
       
       if (specs.length === 0) {
-        doc.fillColor(colors.secondary).font('Helvetica').fontSize(10).text('No specializations selected.');
+        if (doc.y > 720) {
+          doc.addPage();
+          doc.y = 50;
+        }
+        doc.fillColor(colors.secondary).font('Helvetica').fontSize(10).text('No specializations selected.', 50, doc.y);
       } else {
         specs.forEach((sp, idx) => {
-          doc.fillColor(colors.primary).font('Helvetica-Bold').fontSize(10).text(`${idx + 1}. ${sp}`, { continued: true });
-          doc.fillColor(colors.secondary).font('Helvetica').fontSize(9).text(`  - Preferred Center: ${centerPrefs[sp] || 'No preference'}`);
-          doc.moveDown(0.3);
+          if (doc.y > 720) {
+            doc.addPage();
+            doc.y = 50;
+          }
+          const currentY = doc.y;
+          doc.fillColor(colors.primary).font('Helvetica-Bold').fontSize(10.5).text(`${idx + 1}. ${sp}`, 50, currentY, { width: 180, lineGap: 2 });
+          const spEndY = doc.y;
+          doc.fillColor(colors.secondary).font('Helvetica').fontSize(10).text(`  - Preferred Center: ${centerPrefs[sp] || 'No preference'}`, 230, currentY, { width: 320, lineGap: 2 });
+          const centerEndY = doc.y;
+          doc.y = Math.max(spEndY, centerEndY) + 6;
         });
       }
 
@@ -180,10 +212,14 @@ router.get(
         try {
           const skills = typeof sub.diagnosticSkills === 'string' ? JSON.parse(sub.diagnosticSkills) : sub.diagnosticSkills;
           Object.entries(skills).forEach(([skill, val]: any) => {
-            renderRow(skill, val);
+            renderGeneralRow(skill, val);
           });
         } catch {
-          doc.fontSize(10).text(String(sub.diagnosticSkills));
+          if (doc.y > 720) {
+            doc.addPage();
+            doc.y = 50;
+          }
+          doc.fillColor(colors.primary).font('Helvetica').fontSize(10.5).text(String(sub.diagnosticSkills), 50, doc.y, { width: 500 });
         }
       }
 
@@ -192,34 +228,50 @@ router.get(
         try {
           const exp = typeof sub.surgicalExperience === 'string' ? JSON.parse(sub.surgicalExperience) : sub.surgicalExperience;
           Object.entries(exp).forEach(([cat, val]: any) => {
-            doc.fillColor(colors.primary).font('Helvetica-Bold').fontSize(9).text(cat.toUpperCase(), { continued: true });
-            doc.fillColor(colors.secondary).font('Helvetica').fontSize(9).text(` | Supervision: ${val.supervision || 0} | Independent: ${val.independent || 0}`);
-            doc.moveDown(0.2);
+            if (doc.y > 720) {
+              doc.addPage();
+              doc.y = 50;
+            }
+            const currentY = doc.y;
+            doc.fillColor(colors.primary).font('Helvetica-Bold').fontSize(9.5).text(cat.toUpperCase(), 50, currentY, { width: 180, lineGap: 2 });
+            const catEndY = doc.y;
+            doc.fillColor(colors.secondary).font('Helvetica').fontSize(9.5).text(`| Supervision: ${val.supervision || 0} | Independent: ${val.independent || 0}`, 240, currentY, { width: 310, lineGap: 2 });
+            const valEndY = doc.y;
+            doc.y = Math.max(catEndY, valEndY) + 6;
           });
         } catch {
-          doc.fontSize(10).text(String(sub.surgicalExperience));
+          if (doc.y > 720) {
+            doc.addPage();
+            doc.y = 50;
+          }
+          doc.fillColor(colors.primary).font('Helvetica').fontSize(10.5).text(String(sub.surgicalExperience), 50, doc.y, { width: 500 });
         }
       }
 
       drawSectionHeader('References & Documents');
-      renderRow('Reference 1 (LOR)', `${sub.lor1RefName || '—'} (${sub.lor1RefContact || 'No contact'})`);
-      renderRow('Reference 2 (LOR)', `${sub.lor2RefName || '—'} (${sub.lor2RefContact || 'No contact'})`);
+      renderGeneralRow('Reference 1 (LOR)', `${sub.lor1RefName || '—'} (${sub.lor1RefContact || 'No contact'})`);
+      renderGeneralRow('Reference 2 (LOR)', `${sub.lor2RefName || '—'} (${sub.lor2RefContact || 'No contact'})`);
       
       const docList = [];
       if (sub.lor1Url) docList.push('LOR 1');
       if (sub.lor2Url) docList.push('LOR 2');
       if (sub.photoUrl) docList.push('Photo');
       if (sub.paymentUrl) docList.push('Payment Receipt');
-      renderRow('Uploaded Files', docList.length > 0 ? docList.join(', ') : 'No documents uploaded');
+      renderGeneralRow('Uploaded Files', docList.length > 0 ? docList.join(', ') : 'No documents uploaded');
 
       drawSectionHeader('Declaration & Submission');
-      renderRow('Payment ID', sub.paymentId || '—');
-      renderRow('Payment Mode', sub.paymentMode?.toUpperCase() || '—');
-      renderRow('Referral Source', sub.referralSource || '—');
+      renderGeneralRow('Payment ID', sub.paymentId || '—');
+      renderGeneralRow('Payment Mode', sub.paymentMode?.toUpperCase() || '—');
+      renderGeneralRow('Referral Source', sub.referralSource || '—');
+      
+      if (doc.y > 720) {
+        doc.addPage();
+        doc.y = 50;
+      }
       doc.moveDown(0.5);
-      doc.fillColor(colors.secondary).font('Helvetica-Oblique').fontSize(8).text(
+      doc.fillColor(colors.secondary).font('Helvetica-Oblique').fontSize(8.5).text(
         'Declaration: I hereby declare that the information provided above is true to the best of my knowledge and belief.',
-        { width: 450 }
+        50, doc.y, { width: 500, lineGap: 2 }
       );
 
       // --- PAGE NUMBERS ---
@@ -227,7 +279,7 @@ router.get(
       for (let i = range.start; i < range.start + range.count; i++) {
         doc.switchToPage(i);
         doc.fillColor(colors.muted).fontSize(8).text(
-          `Page ${i + 1} of ${range.count} | Generated for official records by SAV Admisssions Portal`,
+          `Page ${i + 1} of ${range.count} | Generated by SAV Admissions Portal`,
           50, 780, { align: 'center' }
         );
       }
@@ -373,13 +425,8 @@ router.get(
       .orderBy(desc(applicationSubmissionsTable.submittedAt));
 
     const rows = subs.map((s) => {
-      let specParsed: any = [];
-      try {
-        specParsed = JSON.parse(s.specialization ?? "[]");
-      } catch {
-        specParsed = s.specialization;
-      }
-      const specString = Array.isArray(specParsed) ? specParsed.join(", ") : (specParsed || "");
+      const specParsed = parseSpecializationString(s.specialization);
+      const specString = specParsed.join(", ");
 
       let cpParsed: Record<string, any> = {};
       try {
@@ -396,6 +443,8 @@ router.get(
 
       const baseRow: Record<string, any> = {
         "Submission ID": s.id,
+        "Date": s.submittedAt ? new Date(s.submittedAt).toISOString().split('T')[0] : "",
+        "Specialities": specString,
         "Timestamp": s.submittedAt ? new Date(s.submittedAt).toLocaleString("en-IN") : "",
         "Name in Full (First Name, Middle Name, Last/Family Name)": s.fullName,
         "E-mail (this would be the ID all communication would be shared on)": s.email,
@@ -483,29 +532,44 @@ router.get(
 
     const wb = XLSX.utils.book_new();
 
+    const addAutoFilter = (ws: XLSX.WorkSheet) => {
+      if (!ws["!ref"]) return;
+      try {
+        const range = XLSX.utils.decode_range(ws["!ref"]);
+        ws["!autofilter"] = {
+          ref: XLSX.utils.encode_range({
+            s: { c: 0, r: 0 },
+            e: { c: range.e.c, r: range.e.r }
+          })
+        };
+      } catch (err) {
+        console.error("Failed to add autofilter:", err);
+      }
+    };
+
     // 1. General Submissions Sheet
     const wsAll = XLSX.utils.json_to_sheet(rows);
     const colWidths = Object.keys(rows[0] ?? {}).map((k) => ({ wch: Math.max(k.length + 2, 22) }));
     wsAll["!cols"] = colWidths;
     // Set row height for header
     wsAll["!rows"] = [{ hpt: 30 }]; 
+    addAutoFilter(wsAll);
     XLSX.utils.book_append_sheet(wb, wsAll, "All Submissions");
 
     // 2. Specialization Specific Sheets
     const specsFound = new Set<string>();
     subs.forEach(s => {
-      let sp: any = [];
-      try { sp = JSON.parse(s.specialization ?? "[]"); } catch { sp = s.specialization; }
-      if (Array.isArray(sp)) sp.forEach(item => specsFound.add(String(item)));
-      else if (sp) specsFound.add(String(sp));
+      const sp = parseSpecializationString(s.specialization);
+      sp.forEach(item => specsFound.add(String(item)));
     });
 
     specsFound.forEach(specName => {
-      const specRows = rows.filter(r => r["Select 1 option from the dropbox"].includes(specName));
+      const specRows = rows.filter(r => r["Specialities"].includes(specName));
       if (specRows.length > 0) {
         const wsSpec = XLSX.utils.json_to_sheet(specRows);
         wsSpec["!cols"] = colWidths;
         wsSpec["!rows"] = [{ hpt: 25 }];
+        addAutoFilter(wsSpec);
         // Sanitize sheet name (max 31 chars, no special chars)
         const sheetName = specName.replace(/[\\/?*[\]]/g, "").slice(0, 30);
         XLSX.utils.book_append_sheet(wb, wsSpec, sheetName);
@@ -514,9 +578,8 @@ router.get(
 
     // 3. Application Summary Sheet
     const summaryRows = subs.map(s => {
-      let specParsed: any = [];
-      try { specParsed = JSON.parse(s.specialization ?? "[]"); } catch { specParsed = s.specialization; }
-      const specString = Array.isArray(specParsed) ? specParsed.join(", ") : (specParsed || "");
+      const specParsed = parseSpecializationString(s.specialization);
+      const specString = specParsed.join(", ");
 
       let cpParsed: Record<string, any> = {};
       try { cpParsed = JSON.parse(s.centerPreference ?? "{}"); } catch { }
@@ -538,6 +601,7 @@ router.get(
       { wch: 30 }, { wch: 40 }, { wch: 40 }, { wch: 20 }, { wch: 20 }, { wch: 30 }, { wch: 20 }
     ];
     wsSummary["!rows"] = [{ hpt: 35 }]; // Taller header for summary
+    addAutoFilter(wsSummary);
     XLSX.utils.book_append_sheet(wb, wsSummary, "Application Summary");
 
     const safeName = (form?.title ?? `form-${formId}`).replace(/[^a-zA-Z0-9-_]/g, "_").slice(0, 40);
@@ -611,14 +675,20 @@ router.patch(
         }).returning();
 
         if (updated.specialization && candidate) {
-          const specs = await db.select().from(specialitiesTable);
-          const spec = specs.find((s) => s.name === updated.specialization);
-          if (spec) {
-            await db.insert(candidatePreferencesTable).values({
-              candidateId: candidate.id,
-              specialityId: spec.id,
-              preferenceOrder: 1,
-            });
+          const specList = parseSpecializationString(updated.specialization);
+          if (Array.isArray(specList) && specList.length > 0) {
+            const specs = await db.select().from(specialitiesTable);
+            let order = 1;
+            for (const specName of specList) {
+              const spec = specs.find((s) => s.name.toLowerCase() === specName.toLowerCase());
+              if (spec) {
+                await db.insert(candidatePreferencesTable).values({
+                  candidateId: candidate.id,
+                  specialityId: spec.id,
+                  preferenceOrder: order++,
+                }).onConflictDoNothing();
+              }
+            }
           }
         }
       }
@@ -669,19 +739,7 @@ router.post(
     }
 
     if (sub.specialization) {
-      let specList: string[] = [];
-      try {
-        const cleaned = sub.specialization.trim();
-        if (cleaned.startsWith("[")) {
-          specList = JSON.parse(cleaned);
-        } else if (cleaned.includes(",")) {
-          specList = cleaned.split(",").map(s => s.trim());
-        } else {
-          specList = [cleaned];
-        }
-      } catch (err) {
-        specList = [sub.specialization.trim()];
-      }
+      const specList = parseSpecializationString(sub.specialization);
 
       if (Array.isArray(specList) && specList.length > 0) {
         const specs = await db.select().from(specialitiesTable);
@@ -814,19 +872,7 @@ router.post(
           if (!candidate) continue;
 
           if (sub.specialization) {
-            let specList: string[] = [];
-            try {
-              const cleaned = sub.specialization.trim();
-              if (cleaned.startsWith("[")) {
-                specList = JSON.parse(cleaned);
-              } else if (cleaned.includes(",")) {
-                specList = cleaned.split(",").map(s => s.trim());
-              } else {
-                specList = [cleaned];
-              }
-            } catch (err) {
-              specList = [sub.specialization.trim()];
-            }
+            const specList = parseSpecializationString(sub.specialization);
 
             if (Array.isArray(specList) && specList.length > 0) {
               const specs = await db.select().from(specialitiesTable);
@@ -1110,10 +1156,7 @@ router.post(
 
         if (existingSub) {
           // Merge new specializations into existing record
-          let existingSpecs: string[] = [];
-          try { existingSpecs = JSON.parse(existingSub.specialization ?? "[]"); } catch {
-            if (existingSub.specialization) existingSpecs = [existingSub.specialization];
-          }
+          const existingSpecs = parseSpecializationString(existingSub.specialization);
           const newSpecs = group.specializations.map((s) => s.name);
           const mergedSpecs = [...new Set([...existingSpecs, ...newSpecs])];
 
@@ -1750,8 +1793,20 @@ router.post("/apply/:token", async (req, res) => {
       subData.paymentMode = "Manual Offline";
       subData.paidAmount = body.paidAmount ? Number(body.paidAmount) : 0;
     } else {
+      subData.paymentId = razorpayId;
       subData.paymentUrl = `razorpay:${razorpayId}`;
       subData.paymentMode = "Razorpay";
+      // Calculate payment amount based on the number of selected specializations
+      let specCount = 1;
+      try {
+        if (subData.specialization) {
+          const parsed = JSON.parse(subData.specialization);
+          if (Array.isArray(parsed)) {
+            specCount = parsed.length;
+          }
+        }
+      } catch (e) {}
+      subData.paidAmount = 2750 * specCount;
     }
   }
 

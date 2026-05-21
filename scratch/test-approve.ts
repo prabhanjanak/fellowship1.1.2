@@ -2,33 +2,30 @@ import { db } from "@workspace/db";
 import { sql } from "drizzle-orm";
 
 async function main() {
-  console.log("Running direct schema migration via Drizzle...");
-  
-  try {
-    await db.execute(sql`
-      ALTER TABLE "candidates" ADD COLUMN IF NOT EXISTS "mcq_score" text;
-    `);
-    console.log("✓ Added/Verified mcq_score column");
-  } catch (error) {
-    console.error("Failed to add mcq_score column:", error);
-  }
-
-  try {
-    await db.execute(sql`
-      ALTER TABLE "candidates" ADD COLUMN IF NOT EXISTS "psychometric_score" text;
-    `);
-    console.log("✓ Added/Verified psychometric_score column");
-  } catch (error) {
-    console.error("Failed to add psychometric_score column:", error);
-  }
-
-  console.log("\nChecking columns of 'candidates' table...");
-  const cols = await db.execute(sql`
-    SELECT column_name, data_type 
-    FROM information_schema.columns 
-    WHERE table_name = 'candidates'
+  console.log("Checking candidate Lavanya G in database...");
+  const cRes = await db.execute(sql`
+    SELECT id, "full_name", email, status 
+    FROM candidates 
+    WHERE "full_name" ILIKE '%Lavanya%' OR email ILIKE '%lavanya%'
   `);
-  console.log("Columns:", cols.rows);
+  console.log("Candidates found:", cRes.rows);
+
+  for (const cand of cRes.rows) {
+    const prefs = await db.execute(sql`
+      SELECT cp.*, s.name as spec_name 
+      FROM candidate_preferences cp
+      JOIN specialities s ON s.id = cp.speciality_id
+      WHERE cp.candidate_id = ${cand.id}
+    `);
+    console.log(`Preferences for Candidate ID ${cand.id}:`, prefs.rows);
+  }
+
+  const subRes = await db.execute(sql`
+    SELECT id, "full_name", email, status, specialization, paid_amount, payment_id, payment_mode
+    FROM application_submissions 
+    WHERE "full_name" ILIKE '%Lavanya%' OR email ILIKE '%lavanya%'
+  `);
+  console.log("Submissions found:", subRes.rows);
 }
 
 main().catch(console.error);

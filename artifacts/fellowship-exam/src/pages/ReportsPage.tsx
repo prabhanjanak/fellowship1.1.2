@@ -81,6 +81,22 @@ export default function ReportsPage() {
     }
   };
 
+  const downloadDailyReport = async () => {
+    try {
+      const blob = await api.getBlob("/reports/daily-report");
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.setAttribute("download", `Daily_Report_${new Date().toISOString().split('T')[0]}.xlsx`);
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+    } catch (error) {
+      console.error("Daily Report download failed:", error);
+    }
+  };
+
   if (loadingBatches || loadingCandidates) {
     return (
       <div className="flex items-center justify-center min-h-[400px]">
@@ -101,12 +117,18 @@ export default function ReportsPage() {
           <h1 className="text-3xl font-bold tracking-tight">Analytics & Reports</h1>
           <p className="text-muted-foreground">Comprehensive insights into candidate performance and recruitment status.</p>
         </div>
-        <div className="flex gap-4 items-center">
+        <div className="flex gap-4 items-center flex-wrap">
             <button 
               onClick={downloadCycleReport}
               className="inline-flex items-center justify-center gap-2 whitespace-nowrap transition-all focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0 hover:scale-[1.02] active:scale-[0.98] border-none min-h-9 px-6 py-2 w-72 h-14 rounded-2xl orange-gradient text-white font-black uppercase tracking-widest text-[11px] shadow-xl shadow-orange-500/20"
             >
               <FileText className="h-4 w-4" /> Download Cycle Report
+            </button>
+            <button 
+              onClick={downloadDailyReport}
+              className="inline-flex items-center justify-center gap-2 whitespace-nowrap transition-all focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0 hover:scale-[1.02] active:scale-[0.98] border-none min-h-9 px-6 py-2 w-72 h-14 rounded-2xl premium-gradient text-white font-black uppercase tracking-widest text-[11px] shadow-xl shadow-slate-900/20"
+            >
+              <FileText className="h-4 w-4" /> Download Daily Report
             </button>
            <div className="hidden md:flex gap-2">
               <Badge variant="outline" className="px-3 py-1 gap-1.5 bg-white shadow-sm h-10">

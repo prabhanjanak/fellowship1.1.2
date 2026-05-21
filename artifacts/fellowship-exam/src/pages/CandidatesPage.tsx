@@ -720,15 +720,19 @@ export default function CandidatesPage() {
                        </div>
                     </td>
                     <td className="px-6 py-5">
-                       {c.paymentInfo && c.paymentInfo.amount != null ? (
+                       {c.status === 'approved' || c.status === 'interview_completed' || c.status === 'allocated' ? (
                          <div className="flex flex-col">
-                           <span className="text-sm font-black text-slate-900 leading-none">₹{c.paymentInfo.amount}</span>
-                           <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mt-1">{c.paymentInfo.mode}</span>
-                         </div>
-                       ) : c.status === 'approved' || c.status === 'interview_completed' || c.status === 'allocated' ? (
-                         <div className="flex flex-col">
-                           <span className="text-sm font-black text-emerald-600 leading-none">₹2,750</span>
+                           <span className="text-sm font-black text-emerald-600 leading-none">
+                             ₹{(2750 * Math.max(1, c.specializations?.length || 0)).toLocaleString("en-IN")}
+                           </span>
                            <span className="text-[9px] font-bold text-emerald-400 uppercase tracking-widest mt-1">PAID (Verified)</span>
+                         </div>
+                       ) : c.paymentInfo && c.paymentInfo.amount != null ? (
+                         <div className="flex flex-col">
+                           <span className="text-sm font-black text-slate-900 leading-none">
+                             ₹{Number(c.paymentInfo.amount).toLocaleString("en-IN")}
+                           </span>
+                           <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mt-1">{c.paymentInfo.mode}</span>
                          </div>
                        ) : (
                          <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest italic">—</span>

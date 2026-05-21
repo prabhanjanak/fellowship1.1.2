@@ -36,6 +36,7 @@ import { eq } from "drizzle-orm";
 import PDFDocument from "pdfkit";
 import path from "path";
 import { requireAuth, requireRole } from "../middleware/auth";
+import { parseSpecializationString } from "../lib/utils";
 
 const router: IRouter = Router();
 
@@ -71,27 +72,44 @@ router.get(
       const colors = { primary: '#0f172a', secondary: '#475569', accent: '#2563eb', muted: '#94a3b8', border: '#e2e8f0' };
 
       const drawSectionHeader = (title: string) => {
-        doc.moveDown(1.5);
+        if (doc.y > 680) {
+          doc.addPage();
+          doc.y = 50;
+        }
+        doc.moveDown(1);
         const y = doc.y;
-        doc.rect(50, y, 500, 20).fill('#f8fafc');
-        doc.fillColor(colors.primary).font('Helvetica-Bold').fontSize(11).text(title.toUpperCase(), 60, y + 5);
-        doc.strokeColor(colors.border).lineWidth(0.5).moveTo(50, y + 20).lineTo(550, y + 20).stroke();
-        doc.moveDown(0.8);
+        doc.rect(50, y, 500, 24).fill('#f1f5f9');
+        doc.fillColor(colors.primary).font('Helvetica-Bold').fontSize(12.5).text(title.toUpperCase(), 60, y + 6, { width: 480 });
+        doc.strokeColor(colors.border).lineWidth(0.5).moveTo(50, y + 24).lineTo(550, y + 24).stroke();
+        doc.y = y + 32;
       };
 
-      const renderRow = (label: string, value: any) => {
-        const valText = (value === null || value === undefined || value === "null") ? "—" : String(value);
-        doc.fillColor(colors.secondary).font('Helvetica-Bold').fontSize(8).text(label.toUpperCase(), { continued: true });
-        doc.fillColor(colors.primary).font('Helvetica').fontSize(10).text(` : ${valText}`);
+      const renderApplicationRecordRow = (label: string, value: any) => {
+        const valText = (value === null || value === undefined || value === "null" || value === "") ? "—" : String(value);
+        const startY = doc.y;
+        doc.fillColor(colors.secondary).font('Helvetica-Bold').fontSize(10.5).text(label.toUpperCase(), 50, startY, { width: 120, lineGap: 2 });
+        const labelEndY = doc.y;
+        doc.fillColor(colors.primary).font('Helvetica').fontSize(11.5).text(`: ${valText}`, 180, startY, { width: 250, lineGap: 2 });
+        const valueEndY = doc.y;
+        doc.y = Math.max(labelEndY, valueEndY) + 5;
+      };
+
+      const renderGeneralRow = (label: string, value: any) => {
+        const valText = (value === null || value === undefined || value === "null" || value === "") ? "—" : String(value);
+        if (doc.y > 720) {
+          doc.addPage();
+          doc.y = 50;
+        }
+        const currentY = doc.y;
+        doc.fillColor(colors.secondary).font('Helvetica-Bold').fontSize(10.5).text(label.toUpperCase(), 50, currentY, { width: 160, lineGap: 2 });
+        const labelEndY = doc.y;
+        doc.fillColor(colors.primary).font('Helvetica').fontSize(11.5).text(`: ${valText}`, 220, currentY, { width: 330, lineGap: 2 });
+        const valueEndY = doc.y;
+        doc.y = Math.max(labelEndY, valueEndY) + 6;
       };
 
       const parseSpecializations = (spec: string | null | undefined): string[] => {
-        if (!spec) return [];
-        try {
-          const parsed = JSON.parse(spec);
-          if (Array.isArray(parsed)) return parsed.map(String).filter(Boolean);
-        } catch { }
-        return spec.split(",").map((s) => s.trim()).filter(Boolean);
+        return parseSpecializationString(spec);
       };
 
       const parseCenterPreferences = (cp: string | null | undefined, customAnswers?: any, sections?: any[]): Record<string, string> => {
@@ -122,68 +140,93 @@ router.get(
       };
 
       // Header
-      doc.fillColor(colors.accent).font('Helvetica-Bold').fontSize(22).text('SANKARA ACADEMY OF VISION', { align: 'left' });
-      doc.fillColor(colors.primary).font('Helvetica').fontSize(10).text('Educational unit of Sankara Eye Foundation, India', { align: 'left' });
+      doc.fillColor(colors.accent).font('Helvetica-Bold').fontSize(24).text('SANKARA ACADEMY OF VISION', 50, 50, { width: 500, align: 'left' });
+      doc.fillColor(colors.primary).font('Helvetica').fontSize(11).text('Educational unit of Sankara Eye Foundation, India', 50, 75, { width: 500, align: 'left' });
       doc.moveDown(0.2);
-      doc.fillColor(colors.muted).fontSize(9).text('FELLOWSHIP PROGRAM ADMISSIONS', { align: 'left' });
-      doc.strokeColor(colors.accent).lineWidth(2).moveTo(50, doc.y + 10).lineTo(550, doc.y + 10).stroke();
-      doc.moveDown(2);
+      doc.fillColor(colors.muted).font('Helvetica-Bold').fontSize(10).text('FELLOWSHIP PROGRAM ADMISSIONS', 50, 90, { width: 500, align: 'left' });
+      doc.strokeColor(colors.accent).lineWidth(2).moveTo(50, 105).lineTo(550, 105).stroke();
 
-      // Photo
+      // Photo on the right
       const photoUrl = sub.photoUrl;
+      const photoX = 450;
+      const photoY = 120;
+      const photoW = 100;
+      const photoH = 120;
+
       if (photoUrl && photoUrl.startsWith("/objects/")) {
         const localPath = path.join(process.cwd(), "uploads", photoUrl.replace("/objects/", ""));
         try {
-          doc.image(localPath, 460, 120, { width: 90, height: 110 });
-          doc.rect(460, 120, 90, 110).strokeColor(colors.border).lineWidth(1).stroke();
+          doc.image(localPath, photoX, photoY, { width: photoW, height: photoH });
+          doc.rect(photoX, photoY, photoW, photoH).strokeColor(colors.border).lineWidth(1).stroke();
         } catch (e) {
-          doc.rect(460, 120, 90, 110).fill('#f1f5f9');
-          doc.fillColor(colors.muted).fontSize(8).text('PHOTO NOT AVAILABLE', 465, 165, { width: 80, align: 'center' });
+          doc.rect(photoX, photoY, photoW, photoH).fill('#f1f5f9');
+          doc.fillColor(colors.muted).font('Helvetica').fontSize(8.5).text('PHOTO NOT AVAILABLE', photoX, photoY + 50, { width: photoW, align: 'center' });
         }
       } else {
-        doc.rect(460, 120, 90, 110).fill('#f1f5f9');
-        doc.fillColor(colors.muted).fontSize(8).text('NO PHOTO UPLOADED', 465, 165, { width: 80, align: 'center' });
+        doc.rect(photoX, photoY, photoW, photoH).fill('#f1f5f9');
+        doc.fillColor(colors.muted).font('Helvetica').fontSize(8.5).text('NO PHOTO UPLOADED', photoX, photoY + 50, { width: photoW, align: 'center' });
       }
 
       doc.y = 120;
-      doc.fillColor(colors.accent).font('Helvetica-Bold').fontSize(14).text('APPLICATION RECORD');
-      doc.moveDown(0.5);
-      renderRow('Application ID', id);
-      renderRow('Program', program?.name || 'Fellowship Program');
-      renderRow('Submission Date', sub.submittedAt ? new Date(sub.submittedAt).toLocaleDateString('en-GB') : '—');
-      renderRow('Status', sub.status.toUpperCase());
+      doc.fillColor(colors.accent).font('Helvetica-Bold').fontSize(14).text('APPLICATION RECORD', 50, 120, { width: 380 });
+      doc.y = 145; // Give standard padding from title
+
+      renderApplicationRecordRow('Application ID', id);
+      renderApplicationRecordRow('Program', program?.name || 'Fellowship Program');
+      renderApplicationRecordRow('Submission Date', sub.submittedAt ? new Date(sub.submittedAt).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : '—');
+      renderApplicationRecordRow('Status', sub.status.toUpperCase());
       
+      // Ensure vertical cursor is below the photo height before starting section headers to prevent overlapping
+      if (doc.y < 250) {
+        doc.y = 250;
+      }
+
       drawSectionHeader('Personal Details');
-      renderRow('Full Name', sub.fullName);
-      renderRow('Email Address', sub.email);
-      renderRow('Phone Number', sub.phone);
-      renderRow('Date of Birth', sub.dateOfBirth);
-      renderRow('Permanent Address', sub.permanentAddress);
+      renderGeneralRow('Full Name', sub.fullName);
+      renderGeneralRow('Email Address', sub.email);
+      renderGeneralRow('Phone Number', sub.phone);
+      renderGeneralRow('Date of Birth', sub.dateOfBirth);
+      renderGeneralRow('Permanent Address', sub.permanentAddress);
 
       drawSectionHeader('Qualifications');
-      renderRow('Degree', sub.degree);
-      renderRow('College', sub.medicalCollege);
-      renderRow('University', sub.university);
-      renderRow('Reg No', sub.medicalCouncilNumber);
+      renderGeneralRow('Degree', sub.degree);
+      renderGeneralRow('College', sub.medicalCollege);
+      renderGeneralRow('University', sub.university);
+      renderGeneralRow('Reg No', sub.medicalCouncilNumber);
 
       drawSectionHeader('Specialization & Centers');
       const specs = parseSpecializations(sub.specialization);
       const centerPrefs = parseCenterPreferences(sub.centerPreference, sub.customAnswers, form?.sectionsConfig ?? undefined);
       specs.forEach((sp, idx) => {
-        doc.fillColor(colors.primary).font('Helvetica-Bold').fontSize(10).text(`${idx + 1}. ${sp}`, { continued: true });
-        doc.fillColor(colors.secondary).font('Helvetica').fontSize(9).text(` - Center: ${centerPrefs[sp] || 'No preference'}`);
-        doc.moveDown(0.2);
+        if (doc.y > 720) {
+          doc.addPage();
+          doc.y = 50;
+        }
+        const currentY = doc.y;
+        doc.fillColor(colors.primary).font('Helvetica-Bold').fontSize(10.5).text(`${idx + 1}. ${sp}`, 50, currentY, { width: 180, lineGap: 2 });
+        const spEndY = doc.y;
+        doc.fillColor(colors.secondary).font('Helvetica').fontSize(10).text(` - Center: ${centerPrefs[sp] || 'No preference'}`, 230, currentY, { width: 320, lineGap: 2 });
+        const centerEndY = doc.y;
+        doc.y = Math.max(spEndY, centerEndY) + 6;
       });
 
       drawSectionHeader('Declaration');
-      renderRow('Payment ID', sub.paymentId || '—');
+      renderGeneralRow('Payment ID', sub.paymentId || '—');
+      
+      if (doc.y > 720) {
+        doc.addPage();
+        doc.y = 50;
+      }
       doc.moveDown(0.5);
-      doc.fillColor(colors.secondary).font('Helvetica-Oblique').fontSize(8).text('I hereby declare that the information provided is true.');
+      doc.fillColor(colors.secondary).font('Helvetica-Oblique').fontSize(8.5).text(
+        'Declaration: I hereby declare that the information provided above is true to the best of my knowledge and belief.',
+        50, doc.y, { width: 500, lineGap: 2 }
+      );
 
       const range = doc.bufferedPageRange();
       for (let i = range.start; i < range.start + range.count; i++) {
         doc.switchToPage(i);
-        doc.fillColor(colors.muted).fontSize(8).text(`Page ${i + 1} of ${range.count}`, 50, 780, { align: 'center' });
+        doc.fillColor(colors.muted).fontSize(8).text(`Page ${i + 1} of ${range.count} | Generated by SAV Admissions Portal`, 50, 780, { align: 'center' });
       }
 
       doc.end();
