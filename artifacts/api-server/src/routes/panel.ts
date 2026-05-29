@@ -332,7 +332,7 @@ router.get("/display/live", async (req: any, res) => {
       }
 
       const panels = (await db.execute(sql`
-        SELECT ip.id, ip.name, ip.room_number, ip.is_active, ip.program_id, ip.speciality_id
+        SELECT ip.id, ip.name, ip.room_number, ip.is_active, ip.program_id, ip.speciality_id, ip.is_mind_matter
         FROM interview_panels ip
         WHERE ip.is_active = TRUE AND ip.is_mock = ${isMock}
         ORDER BY ip.room_number
@@ -385,6 +385,7 @@ router.get("/display/live", async (req: any, res) => {
           roomNumber: p["room_number"],
           specialityId: p["speciality_id"],
           isActive: p["is_active"],
+          isMindMatter: p["is_mind_matter"] === true || p["is_mind_matter"] === 1,
           members: members.map(m => m.doctor_name),
           batch: batch,
           current: current ? {
