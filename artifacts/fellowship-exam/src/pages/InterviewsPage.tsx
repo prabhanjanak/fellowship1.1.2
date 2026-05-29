@@ -93,6 +93,7 @@ function DoctorView({ toast, qc }: { toast: ReturnType<typeof import("../hooks/u
   const { data: assignments = [] } = useQuery<DoctorAssignment[]>({
     queryKey: ["doctor-assignments"],
     queryFn: () => api.get<DoctorAssignment[]>("/interviews/assignments"),
+    refetchInterval: 3000,
   });
 
   const { data: myStatus } = useQuery<{
@@ -355,7 +356,7 @@ function AdminView({ toast, qc, isCEC }: { toast: ReturnType<typeof import("../h
   const { data: livePanel = [], isLoading: liveLoading } = useQuery<PanelEntry[]>({
     queryKey: ["panel-live"],
     queryFn: () => api.get<PanelEntry[]>("/panel/live"),
-    refetchInterval: activeTab === "live" ? 4000 : false,
+    refetchInterval: 3000,
   });
 
   const { data: specialities = [] } = useQuery<{ id: number; name: string; code: string }[]>({
@@ -366,16 +367,19 @@ function AdminView({ toast, qc, isCEC }: { toast: ReturnType<typeof import("../h
   const { data: doctors = [], isLoading: doctorsLoading } = useQuery<DoctorRow[]>({
     queryKey: ["doctor-assignments-admin"],
     queryFn: () => api.get<DoctorRow[]>("/interviews/doctor-assignments"),
+    refetchInterval: 3000,
   });
 
   const { data: scores = [] } = useQuery<ScoreEntry[]>({
     queryKey: ["interview-scores"],
     queryFn: () => api.get<ScoreEntry[]>("/interviews/scores"),
+    refetchInterval: 3000,
   });
 
   const { data: candidates = [] } = useQuery<Candidate[]>({
     queryKey: ["candidates"],
     queryFn: () => api.get<Candidate[]>("/candidates"),
+    refetchInterval: 3000,
   });
 
   const assignMutation = useMutation({
@@ -649,7 +653,7 @@ function PanelsTab({ toast, qc, candidates, specialities }: {
   const { data: panels = [], isLoading } = useQuery<Panel[]>({
     queryKey: ["panels"],
     queryFn: () => api.get<Panel[]>("/panels"),
-    refetchInterval: 8000,
+    refetchInterval: 3000,
   });
 
 
@@ -663,7 +667,7 @@ function PanelsTab({ toast, qc, candidates, specialities }: {
     queryKey: ["panel-queue", selectedPanelId],
     queryFn: () => api.get<QueueEntry[]>(`/panels/${selectedPanelId}/queue`),
     enabled: selectedPanelId !== null,
-    refetchInterval: 5000,
+    refetchInterval: 3000,
   });
 
   const createMutation = useMutation({
