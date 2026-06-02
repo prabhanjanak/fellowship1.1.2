@@ -89,7 +89,7 @@ router.get("/storage/public-objects/*filePath", async (req: Request, res: Respon
 });
 
 // Private object serving: requires authenticated staff + path must be a known uploaded document
-router.get("/storage/objects/*path", requireAuth, requireRole("super_admin", "program_admin", "central_exam_coordinator", "invigilator", "result_publisher"), async (req: Request, res: Response) => {
+router.get("/storage/objects/*path", requireAuth, requireRole("super_admin", "program_admin", "central_exam_coordinator", "invigilator", "result_publisher", "doctor"), async (req: Request, res: Response) => {
   try {
     const raw = req.params.path;
     const wildcardPath = Array.isArray(raw) ? raw.join("/") : raw;
@@ -101,21 +101,72 @@ router.get("/storage/objects/*path", requireAuth, requireRole("super_admin", "pr
       return;
     }
 
-    // IDOR protection: verify this path is a known document in application_submissions
-    // Super/program admins may access any upload (e.g. freshly replaced files)
+    // IDOR protection
     const reqUser = (req as any).user;
     const isAdminRole = reqUser && ["super_admin", "program_admin", "central_exam_coordinator"].includes(reqUser.role);
 
     if (!isAdminRole) {
-      const found = await db.execute(sql`
-        SELECT 1 FROM application_submissions
-        WHERE lor1_url = ${objectPath} OR lor2_url = ${objectPath}
-           OR photo_url = ${objectPath} OR payment_url = ${objectPath}
-        LIMIT 1
-      `);
-      if (found.rows.length === 0) {
-        res.status(404).json({ error: "Object not found" });
-        return;
+      if (reqUser?.role === "doctor") {
+        // Doctors can only access files of candidates in their panel queue
+        const doctorId = reqUser.userId;
+
+        // 1. Get the doctor's active panel
+        const panelResult = await db.execute(sql`
+          SELECT ip.id as panel_id
+          FROM interview_panel_members ipm
+          JOIN interview_panels ip ON ip.id = ipm.panel_id
+          WHERE ipm.doctor_id = ${doctorId} AND ip.is_active = TRUE
+          LIMIT 1
+        `);
+        const panel = panelResult.rows[0] as { panel_id: number } | undefined;
+
+        if (!panel) {
+          res.status(403).json({ error: "No active panel assignment" });
+          return;
+        }
+
+        // 2. Verify the file belongs to a candidate in the panel queue
+        const fileFound = await db.execute(sql`
+          SELECT 1
+          FROM panel_queue pq
+          JOIN candidates c ON c.id = pq.candidate_id
+          JOIN application_submissions sub ON LOWER(sub.email) = LOWER(c.email)
+          WHERE pq.panel_id = ${panel.panel_id}
+            AND (
+              sub.lor1_url = ${objectPath}
+              OR sub.lor2_url = ${objectPath}
+              OR sub.photo_url = ${objectPath}
+              OR sub.payment_url = ${objectPath}
+            )
+          LIMIT 1
+        `);
+
+        // Also check documents table
+        const docFound = fileFound.rows.length === 0 ? await db.execute(sql`
+          SELECT 1
+          FROM panel_queue pq
+          JOIN documents d ON d.candidate_id = pq.candidate_id
+          WHERE pq.panel_id = ${panel.panel_id}
+            AND d.file_url = ${objectPath}
+          LIMIT 1
+        `) : { rows: [1] };
+
+        if (fileFound.rows.length === 0 && docFound.rows.length === 0) {
+          res.status(404).json({ error: "Object not found" });
+          return;
+        }
+      } else {
+        // Non-admin, non-doctor: check known document paths
+        const found = await db.execute(sql`
+          SELECT 1 FROM application_submissions
+          WHERE lor1_url = ${objectPath} OR lor2_url = ${objectPath}
+             OR photo_url = ${objectPath} OR payment_url = ${objectPath}
+          LIMIT 1
+        `);
+        if (found.rows.length === 0) {
+          res.status(404).json({ error: "Object not found" });
+          return;
+        }
       }
     }
 

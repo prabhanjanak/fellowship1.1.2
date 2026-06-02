@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, useCallback } from "react";
+import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from "react";
 import { api, setToken, clearToken, ApiError, type User } from "../lib/api";
 
 interface AuthContextType {
@@ -7,6 +7,9 @@ interface AuthContextType {
   login: (email: string, password: string) => Promise<void>;
   logout: () => void;
   refreshUser: () => Promise<void>;
+  sessionWarning: boolean;
+  secondsRemaining: number;
+  extendSession: () => void;
 }
 
 const AuthContext = createContext<AuthContextType | null>(null);
@@ -14,6 +17,11 @@ const AuthContext = createContext<AuthContextType | null>(null);
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
+  const [sessionWarning, setSessionWarning] = useState(false);
+  const [secondsRemaining, setSecondsRemaining] = useState(0);
+
+  // Ref so event handlers always see the latest lastInteractionTime without stale closures
+  const lastInteractionRef = useRef<number>(Date.now());
 
   const loadMe = useCallback(async () => {
     const token = localStorage.getItem("fellowship_token");
@@ -44,29 +52,34 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     api.post("/auth/logout", {}).catch(() => {});
     clearToken();
     setUser(null);
+    setSessionWarning(false);
+  }, []);
+
+  const extendSession = useCallback(() => {
+    lastInteractionRef.current = Date.now();
+    setSessionWarning(false);
+    setSecondsRemaining(0);
   }, []);
 
   // Inactivity Auto-Logout Effect
   useEffect(() => {
     if (!user) return;
 
-    let lastInteractionTime = Date.now();
-    let timeoutMinutes = 30; // fallback default to 30 mins
+    lastInteractionRef.current = Date.now();
+    let timeoutMinutes = 30;
 
     // Fetch dynamic timeout configuration from global settings
     api.get<{ value: string }>("/global-settings/session_inactivity_timeout")
       .then(setting => {
-        if (setting && setting.value) {
+        if (setting?.value) {
           const parsed = parseInt(setting.value, 10);
-          if (!isNaN(parsed) && parsed > 0) {
-            timeoutMinutes = parsed;
-          }
+          if (!isNaN(parsed) && parsed > 0) timeoutMinutes = parsed;
         }
       })
       .catch(() => {});
 
     const handleInteraction = () => {
-      lastInteractionTime = Date.now();
+      lastInteractionRef.current = Date.now();
     };
 
     window.addEventListener("mousemove", handleInteraction);
@@ -74,14 +87,22 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     window.addEventListener("click", handleInteraction);
     window.addEventListener("scroll", handleInteraction);
 
-    // Periodically inspect inactivity duration
+    // Check every second for precise countdown display
     const intervalId = setInterval(() => {
-      const elapsedMs = Date.now() - lastInteractionTime;
-      if (elapsedMs > timeoutMinutes * 60 * 1000) {
+      const elapsedMs = Date.now() - lastInteractionRef.current;
+      const timeoutMs = timeoutMinutes * 60 * 1000;
+      const warningThresholdMs = 2 * 60 * 1000; // show warning 2 min before expiry
+      const remaining = Math.max(0, Math.ceil((timeoutMs - elapsedMs) / 1000));
+
+      if (elapsedMs >= timeoutMs) {
         logout();
-        alert("Your session has expired due to inactivity. Please log in again.");
+      } else if (elapsedMs >= timeoutMs - warningThresholdMs) {
+        setSessionWarning(true);
+        setSecondsRemaining(remaining);
+      } else {
+        setSessionWarning(false);
       }
-    }, 10000); // check every 10 seconds
+    }, 1000);
 
     return () => {
       window.removeEventListener("mousemove", handleInteraction);
@@ -98,7 +119,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   return (
-    <AuthContext.Provider value={{ user, loading, login, logout, refreshUser }}>
+    <AuthContext.Provider value={{ user, loading, login, logout, refreshUser, sessionWarning, secondsRemaining, extendSession }}>
       {children}
     </AuthContext.Provider>
   );

@@ -659,4 +659,161 @@ router.get("/interviews/scores/export", requireAuth, requireRole("super_admin", 
   }
 });
 
+// Admin: Specialty-wise marks breakdown export (3-sheet workbook)
+router.get("/interviews/scores/specialty-export", requireAuth, requireRole("super_admin", "program_admin", "central_exam_coordinator"), async (req, res) => {
+  try {
+    const candidates = await db.select().from(candidatesTable).where(eq(candidatesTable.isMock, (req as any).isMockMode));
+    const allSpecs = await db.select().from(specialitiesTable);
+    const allScores = await db.select().from(interviewScoresTable);
+    const allDoctors = await db.select().from(usersTable).where(eq(usersTable.role, "doctor" as any));
+    const allApps = await db.select().from(applicationsTable);
+
+    const { candidatePreferencesTable } = await import("@workspace/db");
+    const allPrefs = await db.select().from(candidatePreferencesTable);
+    const allSubmissions = await db.select().from(applicationSubmissionsTable);
+
+    const addAutoFilter = (ws: XLSX.WorkSheet) => {
+      if (!ws["!ref"]) return;
+      try {
+        const range = XLSX.utils.decode_range(ws["!ref"]);
+        ws["!autofilter"] = { ref: XLSX.utils.encode_range({ s: { c: 0, r: 0 }, e: { c: range.e.c, r: range.e.r } }) };
+      } catch {}
+    };
+
+    // ── SHEET 1: Summary by Specialty ──────────────────────────────────────
+    const summaryRows = allSpecs.map(spec => {
+      // Candidates for this specialty
+      const specCandIds = new Set<number>();
+      allApps.filter(a => a.specialityId === spec.id).forEach(a => specCandIds.add(a.candidateId));
+      allPrefs.filter(p => p.specialityId === spec.id).forEach(p => specCandIds.add(p.candidateId));
+
+      const specCandidates = candidates.filter(c => specCandIds.has(c.id));
+      const specScores = allScores.filter(s => s.specialityId === spec.id);
+
+      const mcqScores = specCandidates.map(c => c.mcqScore ? Number(c.mcqScore) : null).filter(v => v !== null) as number[];
+      const mindScores = specCandidates.map(c => c.psychometricScore ? Number(c.psychometricScore) : null).filter(v => v !== null) as number[];
+      const vivaScores = specScores.map(s => s.score);
+
+      const avg = (arr: number[]) => arr.length > 0 ? Math.round((arr.reduce((a, b) => a + b, 0) / arr.length) * 10) / 10 : null;
+
+      const vivaByCandidate = specCandidates.map(c => {
+        const cs = specScores.filter(s => s.candidateId === c.id);
+        return cs.length > 0 ? cs.reduce((a, s) => a + s.score, 0) / cs.length : null;
+      }).filter(v => v !== null) as number[];
+
+      const avgTotal = specCandidates.map(c => {
+        const mcq = c.mcqScore ? Number(c.mcqScore) : 0;
+        const mm = c.psychometricScore ? Number(c.psychometricScore) : 0;
+        const cs = specScores.filter(s => s.candidateId === c.id);
+        const viva = cs.length > 0 ? cs.reduce((a, s) => a + s.score, 0) / cs.length : 0;
+        return mcq + mm + viva;
+      });
+
+      return {
+        "Specialty": spec.name,
+        "Code": spec.code,
+        "Total Candidates": specCandidates.length,
+        "VIVA Evaluated": new Set(specScores.map(s => s.candidateId)).size,
+        "Avg MCQ (Max 50)": avg(mcqScores) ?? "—",
+        "Avg VIVA (Max 50)": avg(vivaScores) ?? "—",
+        "Avg Mind Matter (Max 10)": avg(mindScores) ?? "—",
+        "Avg Total (Max 110)": avgTotal.length > 0 ? Math.round(avgTotal.reduce((a, b) => a + b, 0) / avgTotal.length * 10) / 10 : "—",
+      };
+    });
+
+    // ── SHEET 2: Candidate Detail (Specialty-wise) ──────────────────────────
+    const detailRows: Record<string, any>[] = [];
+    for (const spec of allSpecs) {
+      const specCandIds = new Set<number>();
+      allApps.filter(a => a.specialityId === spec.id).forEach(a => specCandIds.add(a.candidateId));
+      allPrefs.filter(p => p.specialityId === spec.id).forEach(p => specCandIds.add(p.candidateId));
+      const specCandidates = candidates.filter(c => specCandIds.has(c.id));
+      const specScores = allScores.filter(s => s.specialityId === spec.id);
+
+      // Get unique doctors who scored for this specialty, up to 4
+      const doctorIdsForSpec = [...new Set(specScores.map(s => s.doctorId))].slice(0, 4);
+
+      for (const c of specCandidates) {
+        const candScores = specScores.filter(s => s.candidateId === c.id);
+        const avgViva = candScores.length > 0 ? candScores.reduce((a, s) => a + s.score, 0) / candScores.length : null;
+        const mcq = c.mcqScore ? Number(c.mcqScore) : null;
+        const mm = c.psychometricScore ? Number(c.psychometricScore) : null;
+        const total = (mcq ?? 0) + (avgViva ?? 0) + (mm ?? 0);
+
+        const row: Record<string, any> = {
+          "Specialty": spec.name,
+          "Candidate Name": c.fullName,
+          "Candidate Code": c.candidateCode,
+          "MCQ (Max 50)": mcq ?? "—",
+          "Mind Matter (Max 10)": mm ?? "—",
+        };
+
+        for (let di = 0; di < 4; di++) {
+          const docId = doctorIdsForSpec[di];
+          const doc = docId ? allDoctors.find(d => d.id === docId) : undefined;
+          const sc = docId ? candScores.find(s => s.doctorId === docId) : undefined;
+          row[`Doctor ${di + 1}${doc ? ` (${doc.fullName.split(" ")[0]})` : ""} VIVA`] = sc ? sc.score : "—";
+        }
+
+        row["Avg VIVA (Max 50)"] = avgViva !== null ? Math.round(avgViva * 10) / 10 : "—";
+        row["Total (Max 110)"] = (mcq !== null || avgViva !== null || mm !== null) ? Math.round(total * 10) / 10 : "—";
+        row["Status"] = c.status;
+        detailRows.push(row);
+      }
+    }
+
+    // Sort by specialty then by total desc
+    detailRows.sort((a, b) => {
+      if (a["Specialty"] !== b["Specialty"]) return (a["Specialty"] as string).localeCompare(b["Specialty"]);
+      const ta = typeof a["Total (Max 110)"] === "number" ? a["Total (Max 110)"] : -1;
+      const tb = typeof b["Total (Max 110)"] === "number" ? b["Total (Max 110)"] : -1;
+      return tb - ta;
+    });
+
+    // ── SHEET 3: Doctor Performance ─────────────────────────────────────────
+    const doctorRows = allDoctors.map(doc => {
+      const docScores = allScores.filter(s => s.doctorId === doc.id);
+      const avgScore = docScores.length > 0 ? Math.round(docScores.reduce((a, s) => a + s.score, 0) / docScores.length * 10) / 10 : null;
+      const specIds = [...new Set(docScores.map(s => s.specialityId).filter(Boolean))];
+      const specNames = specIds.map(id => allSpecs.find(s => s.id === id)?.name).filter(Boolean).join(", ");
+
+      return {
+        "Doctor Name": doc.fullName,
+        "Email": doc.email,
+        "Specialty Panel(s)": specNames || "General",
+        "Total Candidates Scored": docScores.length,
+        "Avg Score Given": avgScore ?? "—",
+        "Min Score": docScores.length > 0 ? Math.min(...docScores.map(s => s.score)) : "—",
+        "Max Score": docScores.length > 0 ? Math.max(...docScores.map(s => s.score)) : "—",
+      };
+    });
+
+    // ── Build Workbook ───────────────────────────────────────────────────────
+    const wb = XLSX.utils.book_new();
+
+    const wsSummary = XLSX.utils.json_to_sheet(summaryRows);
+    wsSummary["!cols"] = summaryRows[0] ? Object.keys(summaryRows[0]).map((_, i) => ({ wch: i < 2 ? 35 : 22 })) : [];
+    addAutoFilter(wsSummary);
+    XLSX.utils.book_append_sheet(wb, wsSummary, "Specialty Summary");
+
+    const wsDetail = XLSX.utils.json_to_sheet(detailRows);
+    wsDetail["!cols"] = detailRows[0] ? Object.keys(detailRows[0]).map(() => ({ wch: 22 })) : [];
+    addAutoFilter(wsDetail);
+    XLSX.utils.book_append_sheet(wb, wsDetail, "Candidate Detail");
+
+    const wsDoctor = XLSX.utils.json_to_sheet(doctorRows);
+    wsDoctor["!cols"] = doctorRows[0] ? Object.keys(doctorRows[0]).map(() => ({ wch: 28 })) : [];
+    addAutoFilter(wsDoctor);
+    XLSX.utils.book_append_sheet(wb, wsDoctor, "Doctor Performance");
+
+    const buffer = XLSX.write(wb, { type: "buffer", bookType: "xlsx" });
+    const today = new Date().toISOString().split("T")[0];
+    res.setHeader("Content-Disposition", `attachment; filename="SAV_Specialty_Marks_Breakdown_${today}.xlsx"`);
+    res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+    res.send(buffer);
+  } catch (error: any) {
+    res.status(500).json({ error: error.message || "Failed to export specialty breakdown" });
+  }
+});
+
 export default router;

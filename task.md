@@ -40,3 +40,9 @@
   - [x] Update candidate and marksheet exports in `reports.ts` & `interviews.ts` to output detailed rows per applied specialty.
 - [x] **Milestone 9: System Validation**
   - [x] Run typescript checks and local servers to confirm correct compilation and zero crashes.
+- [x] **Milestone 10: Production LOR Viewing Fix**
+  - [x] Refactor `DocValue` component in `ApplicationFormsPage.tsx` to use query parameter authentication and secure direct URLs, completely resolving browser blob PDF viewing restrictions.
+  - [x] Refactor `SecureFileLink` in `CandidatesPage.tsx` to open the secure direct URL in a new tab directly.
+  - [x] Refactor `VerifyLorPage.tsx` LOR QR gatekeeper to perform administrative access checks via fetch and redirect to the secure direct URL parameter.
+  - [x] Refactor `InterviewsPage.tsx` LOR and supporting documents buttons in candidate dossiers to map candidate document URLs correctly.
+  - [x] Run a production build of the frontend package using `pnpm --filter fellowship-exam run build` to confirm 100% correct TypeScript typing and Vite compilation.
