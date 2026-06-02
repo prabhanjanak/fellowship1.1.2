@@ -48,6 +48,7 @@ import {
   TrendingUp,
   Percent,
 } from "lucide-react";
+import { getCleanObjectPath } from "../lib/utils";
 
 
 interface CustomField {
@@ -719,48 +720,6 @@ function getStorageUrl(objectPath: string): string {
 
 function DocValue({ label, url }: { label: string; url: string | null }) {
   const [expanded, setExpanded] = useState(false);
-  const [blobUrl, setBlobUrl] = useState<string | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [fetchError, setFetchError] = useState<string | null>(null);
-
-  const fetchAndOpen = async (inline: boolean) => {
-    if (!url || !url.startsWith("/objects/")) return;
-    const servingUrl = `/api/storage${url}`;
-    const token = localStorage.getItem("fellowship_token");
-    setFetchError(null);
-    setLoading(true);
-    try {
-      const res = await fetch(servingUrl, { headers: { Authorization: `Bearer ${token}` } });
-      if (!res.ok) throw new Error(`Server returned ${res.status}`);
-      const blob = await res.blob();
-      const objectUrl = URL.createObjectURL(blob);
-      if (inline) {
-        setBlobUrl(objectUrl);
-        setExpanded(true);
-      } else {
-        // Open in new tab
-        const a = document.createElement("a");
-        a.href = objectUrl;
-        a.target = "_blank";
-        a.click();
-        setTimeout(() => URL.revokeObjectURL(objectUrl), 5000);
-      }
-    } catch (e: any) {
-      setFetchError(e.message);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const toggle = () => {
-    if (expanded) {
-      setExpanded(false);
-    } else if (blobUrl) {
-      setExpanded(true);
-    } else {
-      fetchAndOpen(true);
-    }
-  };
 
   if (!url || url === "nil" || url === "null") {
     return <span className="text-xs text-muted-foreground">Not provided</span>;
@@ -785,34 +744,36 @@ function DocValue({ label, url }: { label: string; url: string | null }) {
   }
 
   // Object storage path — fetch with auth and show inline
-  if (url.startsWith("/objects/")) {
+  // Handle both relative (/objects/...) and absolute (https://domain/objects/...) URLs
+  const cleanObjectPath = getCleanObjectPath(url);
+  if (cleanObjectPath) {
     const isPhoto = label.toLowerCase().includes("photo");
     const isLor = label.toLowerCase().includes("lor") || label.toLowerCase().includes("recommendation");
-    const verifyUrl = typeof window !== 'undefined' ? (window.location.origin + "/verify-lor?path=" + encodeURIComponent(url)) : "";
+    const verifyUrl = typeof window !== 'undefined' ? (window.location.origin + "/verify-lor?path=" + encodeURIComponent(cleanObjectPath)) : "";
+    const token = localStorage.getItem("fellowship_token");
+    const secureUrl = `/api/storage${cleanObjectPath}?token=${token}`;
 
     return (
       <div className="w-full mt-1 space-y-1.5">
         <div className="flex items-center gap-2 flex-wrap">
-          <Button size="sm" variant="outline" className="h-6 text-xs px-2 gap-1 no-print" onClick={toggle} disabled={loading}>
-            {loading ? <Loader2 className="h-3 w-3 animate-spin" /> : isPhoto ? <ImageIcon className="h-3 w-3" /> : <FileText className="h-3 w-3" />}
+          <Button size="sm" variant="outline" className="h-6 text-xs px-2 gap-1 no-print" onClick={() => setExpanded(!expanded)}>
+            {isPhoto ? <ImageIcon className="h-3 w-3" /> : <FileText className="h-3 w-3" />}
             {expanded ? "Hide" : "View"} {label}
           </Button>
           <button
             className="text-xs text-primary hover:underline flex items-center gap-0.5 no-print"
-            onClick={() => fetchAndOpen(false)}
-            disabled={loading}
+            onClick={() => window.open(secureUrl, "_blank")}
           >
             <ExternalLink className="h-3 w-3" /> Open
           </button>
         </div>
-        {fetchError && <p className="text-xs text-destructive">{fetchError}</p>}
-        {expanded && blobUrl && isPhoto && (
-          <img src={blobUrl} alt={label} className="rounded-lg border max-h-48 max-w-full object-contain" />
+        {expanded && isPhoto && (
+          <img src={secureUrl} alt={label} className="rounded-lg border max-h-48 max-w-full object-contain" />
         )}
-        {expanded && blobUrl && !isPhoto && (
+        {expanded && !isPhoto && (
           <iframe
-            src={blobUrl}
-            className="w-full rounded-lg border"
+            src={secureUrl}
+            className="w-full rounded-lg border bg-white"
             style={{ height: 380 }}
             title={label}
           />
@@ -1379,34 +1340,19 @@ export default function ApplicationFormsPage() {
     let localUrl: string | null = null;
 
     if (viewedSub?.photoUrl) {
-      if (viewedSub.photoUrl.startsWith("/objects/")) {
+      // Handle both relative /objects/ paths and absolute https://domain/objects/ URLs
+      const cleanPhotoPath = getCleanObjectPath(viewedSub.photoUrl);
+      if (cleanPhotoPath) {
+        // Use direct token-authenticated URL — avoids blob: URL restrictions in production
         const token = localStorage.getItem("fellowship_token");
-        const servingUrl = `/api/storage${viewedSub.photoUrl}`;
-        fetch(servingUrl, {
-          headers: { Authorization: `Bearer ${token}` }
-        })
-          .then(res => {
-            if (!res.ok) throw new Error();
-            return res.blob();
-          })
-          .then(blob => {
-            if (active) {
-              const url = URL.createObjectURL(blob);
-              localUrl = url;
-              convertToJpg(url).then(jpgDataUrl => {
-                if (active) {
-                  setPhotoBlobUrl(jpgDataUrl);
-                }
-              }).catch(() => {
-                if (active) {
-                  setPhotoBlobUrl(url);
-                }
-              });
-            }
-          })
-          .catch(() => {
-            if (active) setPhotoBlobUrl(null);
+        const securePhotoUrl = `/api/storage${cleanPhotoPath}?token=${token}`;
+        if (active) {
+          convertToJpg(securePhotoUrl).then(jpgDataUrl => {
+            if (active) setPhotoBlobUrl(jpgDataUrl);
+          }).catch(() => {
+            if (active) setPhotoBlobUrl(securePhotoUrl);
           });
+        }
       } else if (viewedSub.photoUrl.startsWith("http://") || viewedSub.photoUrl.startsWith("https://")) {
         convertToJpg(viewedSub.photoUrl).then(jpgDataUrl => {
           if (active) setPhotoBlobUrl(jpgDataUrl);

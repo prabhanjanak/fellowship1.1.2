@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { Loader2, ShieldCheck, AlertCircle, ExternalLink, Lock } from "lucide-react";
+import { getCleanObjectPath } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
@@ -25,7 +26,12 @@ export default function VerifyLorPage() {
       return;
     }
 
-    const cleanPath = rawPath.startsWith("/objects/") ? rawPath : `/objects/${rawPath}`;
+    const cleanPath = getCleanObjectPath(rawPath);
+    if (!cleanPath) {
+      setError("Invalid or unsupported document path. Cannot verify credential.");
+      setLoading(false);
+      return;
+    }
     const targetUrl = `/api/storage${cleanPath}`;
 
     setLoading(true);
@@ -41,14 +47,11 @@ export default function VerifyLorPage() {
             : "The requested LOR document could not be found."
           );
         }
-        return res.blob();
-      })
-      .then((blob) => {
-        const localUrl = URL.createObjectURL(blob);
-        setPdfUrl(localUrl);
+        // Redirect/open using direct authorized URL query parameter
+        const authorizedUrl = `/api/storage${cleanPath}?token=${token}`;
+        setPdfUrl(authorizedUrl);
         setLoading(false);
-        // Automatically open/redirect in a new tab if supported
-        window.open(localUrl, "_blank");
+        window.location.replace(authorizedUrl);
       })
       .catch((err) => {
         setError(err.message || "Failed to load the secure document.");

@@ -19,6 +19,7 @@ import {
 } from "lucide-react";
 import { motion } from "framer-motion";
 import { useToast } from "../hooks/use-toast";
+import { getCleanObjectPath } from "../lib/utils";
 
 interface CandidateDocument {
   id: number; docType: string; fileName: string; fileUrl: string | null;
@@ -126,35 +127,19 @@ function normalizeSpecs(specs: string[]): string[] {
     return [s];
   }))).filter(Boolean);
 }
-function SecureFileLink({ url }: { url: string | null }) {
-  const [loading, setLoading] = useState(false);
-  const [fetchError, setFetchError] = useState<string | null>(null);
 
-  const fetchAndOpen = async () => {
-    if (!url) return;
-    if (!url.startsWith("/objects/")) {
+function SecureFileLink({ url }: { url: string | null }) {
+  if (!url) return <span className="text-xs text-muted-foreground">None</span>;
+
+  const handleOpen = () => {
+    const cleanPath = getCleanObjectPath(url);
+    if (!cleanPath) {
+      // Fully external URL (no /objects/ segment) — open directly
       window.open(url, "_blank");
       return;
     }
-    const servingUrl = `/api/storage${url}`;
     const token = localStorage.getItem("fellowship_token");
-    setFetchError(null);
-    setLoading(true);
-    try {
-      const res = await fetch(servingUrl, { headers: { Authorization: `Bearer ${token}` } });
-      if (!res.ok) throw new Error(`Server returned ${res.status}`);
-      const blob = await res.blob();
-      const objectUrl = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = objectUrl;
-      a.target = "_blank";
-      a.click();
-      setTimeout(() => URL.revokeObjectURL(objectUrl), 5000);
-    } catch (e: any) {
-      setFetchError(e.message);
-    } finally {
-      setLoading(false);
-    }
+    window.open(`/api/storage${cleanPath}?token=${token}`, "_blank");
   };
 
   return (
@@ -163,13 +148,11 @@ function SecureFileLink({ url }: { url: string | null }) {
         variant="link"
         size="sm"
         className="text-xs text-orange-600 hover:underline p-0 h-auto flex items-center gap-1"
-        disabled={loading}
-        onClick={fetchAndOpen}
+        onClick={handleOpen}
       >
-        {loading ? <Loader2 className="h-3 w-3 animate-spin" /> : <ExternalLink className="h-3 w-3" />}
-        {loading ? "Opening..." : "View"}
+        <ExternalLink className="h-3 w-3" />
+        View Document
       </Button>
-      {fetchError && <span className="text-[10px] text-red-500">{fetchError}</span>}
     </div>
   );
 }

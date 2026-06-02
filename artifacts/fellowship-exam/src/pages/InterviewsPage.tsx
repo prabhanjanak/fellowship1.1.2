@@ -14,10 +14,11 @@ import {
   Stethoscope, UserPlus, Trash2, Star, Activity, RadioTower,
   LayoutGrid, Plus, Settings, Users, ArrowRight, CheckCircle2,
   Clock, DoorOpen, UserCheck, X, FileText, Loader2,
-  ChevronUp, ChevronDown, ExternalLink, ShieldAlert,
+  GripVertical, ExternalLink, ShieldAlert,
   AlertTriangle, HelpCircle
 } from "lucide-react";
 import { useToast } from "../hooks/use-toast";
+import { getCleanObjectPath } from "../lib/utils";
 
 interface DoctorRow {
   doctorId: number; doctorName: string; doctorEmail: string;
@@ -315,7 +316,12 @@ function DoctorView({ toast, qc }: { toast: ReturnType<typeof import("../hooks/u
                                   d.docType?.toLowerCase().includes("picture")
                                 );
                                 if (photoDoc) {
-                                  return <img src={photoDoc.fileUrl || `/api/documents/${photoDoc.id}`} alt="Candidate Photo" className="h-full w-full object-cover" />;
+                                  const token = localStorage.getItem("fellowship_token");
+                                  const cleanPhotoPath = getCleanObjectPath(photoDoc.fileUrl);
+                                  const photoSrc = cleanPhotoPath
+                                    ? `/api/storage${cleanPhotoPath}?token=${token}`
+                                    : (photoDoc.fileUrl || `/api/documents/${photoDoc.id}`);
+                                  return <img src={photoSrc} alt="Candidate Photo" className="h-full w-full object-cover" />;
                                 }
                                 return scoreOpen.candidateName.charAt(0).toUpperCase();
                               })()}
@@ -436,7 +442,14 @@ function DoctorView({ toast, qc }: { toast: ReturnType<typeof import("../hooks/u
                                       <Button
                                         size="sm"
                                         variant="outline"
-                                        onClick={() => window.open(lor.fileUrl || `/api/documents/${lor.id}?token=${localStorage.getItem("fellowship_token")}`, "_blank")}
+                                        onClick={() => {
+                                          const token = localStorage.getItem("fellowship_token");
+                                          const cleanPath = getCleanObjectPath(lor.fileUrl);
+                                          const target = cleanPath
+                                            ? `/api/storage${cleanPath}?token=${token}`
+                                            : (lor.fileUrl || `/api/documents/${lor.id}?token=${token}`);
+                                          window.open(target, "_blank");
+                                        }}
                                         className="h-8 text-[10px] font-black uppercase text-indigo-700 border-indigo-200 hover:bg-indigo-50 w-full"
                                       >
                                         Open LOR File
@@ -493,7 +506,14 @@ function DoctorView({ toast, qc }: { toast: ReturnType<typeof import("../hooks/u
                                       <Button
                                         size="sm"
                                         variant="outline"
-                                        onClick={() => window.open(doc.fileUrl || `/api/documents/${doc.id}?token=${localStorage.getItem("fellowship_token")}`, "_blank")}
+                                        onClick={() => {
+                                          const token = localStorage.getItem("fellowship_token");
+                                          const cleanPath = getCleanObjectPath(doc.fileUrl);
+                                          const target = cleanPath
+                                            ? `/api/storage${cleanPath}?token=${token}`
+                                            : (doc.fileUrl || `/api/documents/${doc.id}?token=${token}`);
+                                          window.open(target, "_blank");
+                                        }}
                                         className="h-8 text-[10px] font-black uppercase text-slate-700 border-slate-250 hover:bg-slate-100 w-full"
                                       >
                                         Open Document
@@ -626,7 +646,12 @@ function DoctorView({ toast, qc }: { toast: ReturnType<typeof import("../hooks/u
                         d.docType?.toLowerCase().includes("picture")
                       );
                       if (photoDoc) {
-                        return <img src={photoDoc.fileUrl || `/api/documents/${photoDoc.id}`} alt="Passport Photo" className="h-full w-full object-cover" />;
+                        const token = localStorage.getItem("fellowship_token");
+                        const cleanPhotoPath = getCleanObjectPath(photoDoc.fileUrl);
+                        const photoSrc = cleanPhotoPath
+                          ? `/api/storage${cleanPhotoPath}?token=${token}`
+                          : (photoDoc.fileUrl || `/api/documents/${photoDoc.id}`);
+                        return <img src={photoSrc} alt="Passport Photo" className="h-full w-full object-cover" />;
                       }
                       return dossierOpen.candidateName.charAt(0).toUpperCase();
                     })()}
@@ -1062,6 +1087,10 @@ function PanelsTab({ toast, qc, candidates, specialities }: {
   const [editSpecialityId, setEditSpecialityId] = useState<string>("none");
   const [editIsMindMatter, setEditIsMindMatter] = useState(false);
 
+  // Drag-and-drop state
+  const [dragIndex, setDragIndex] = useState<number | null>(null);
+  const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
+
   const { data: panels = [], isLoading } = useQuery<Panel[]>({
     queryKey: ["panels"],
     queryFn: () => api.get<Panel[]>("/panels"),
@@ -1205,44 +1234,18 @@ function PanelsTab({ toast, qc, candidates, specialities }: {
     onError: (e: Error) => toast({ title: "Error", description: e.message, variant: "destructive" }),
   });
 
-  const handleMoveUp = (index: number) => {
-    if (index === 0 || !selectedPanel) return;
+  const handleDrop = (fromIndex: number, toIndex: number) => {
+    if (fromIndex === toIndex || !selectedPanel) return;
     const newQueue = [...waitingQueue];
-    const temp = newQueue[index];
-    newQueue[index] = newQueue[index - 1]!;
-    newQueue[index - 1] = temp!;
+    const [moved] = newQueue.splice(fromIndex, 1);
+    newQueue.splice(toIndex, 0, moved!);
 
     const fullReorderedIds: number[] = [];
-    if (currentCandidate) {
-      fullReorderedIds.push(currentCandidate.candidateId);
-    }
+    if (currentCandidate) fullReorderedIds.push(currentCandidate.candidateId);
     newQueue.forEach(item => fullReorderedIds.push(item.candidateId));
     doneQueue.forEach(item => fullReorderedIds.push(item.candidateId));
 
-    reorderQueueMutation.mutate({
-      panelId: selectedPanel.id,
-      candidateIds: fullReorderedIds
-    });
-  };
-
-  const handleMoveDown = (index: number) => {
-    if (index === waitingQueue.length - 1 || !selectedPanel) return;
-    const newQueue = [...waitingQueue];
-    const temp = newQueue[index];
-    newQueue[index] = newQueue[index + 1]!;
-    newQueue[index + 1] = temp!;
-
-    const fullReorderedIds: number[] = [];
-    if (currentCandidate) {
-      fullReorderedIds.push(currentCandidate.candidateId);
-    }
-    newQueue.forEach(item => fullReorderedIds.push(item.candidateId));
-    doneQueue.forEach(item => fullReorderedIds.push(item.candidateId));
-
-    reorderQueueMutation.mutate({
-      panelId: selectedPanel.id,
-      candidateIds: fullReorderedIds
-    });
+    reorderQueueMutation.mutate({ panelId: selectedPanel.id, candidateIds: fullReorderedIds });
   };
 
   // Auto-select first panel
@@ -1426,16 +1429,42 @@ function PanelsTab({ toast, qc, candidates, specialities }: {
                     </div>
                   )}
 
-                  {/* Waiting list */}
+                  {/* Waiting list — draggable */}
                   {waitingQueue.length > 0 && (
                     <div className="space-y-1.5">
-                      <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Waiting Queue</p>
+                      <div className="flex items-center justify-between">
+                        <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Waiting Queue</p>
+                        <p className="text-[9px] text-muted-foreground/60 font-medium flex items-center gap-1">
+                          <GripVertical className="h-3 w-3" /> Drag to reorder
+                        </p>
+                      </div>
                       {waitingQueue.map((q, i) => (
-                        <div key={q.id} className="flex items-center justify-between rounded-lg border bg-muted/30 px-3 py-2">
+                        <div
+                          key={q.id}
+                          draggable
+                          onDragStart={() => { setDragIndex(i); setDragOverIndex(null); }}
+                          onDragEnd={() => { setDragIndex(null); setDragOverIndex(null); }}
+                          onDragOver={(e) => { e.preventDefault(); setDragOverIndex(i); }}
+                          onDrop={(e) => {
+                            e.preventDefault();
+                            if (dragIndex !== null) handleDrop(dragIndex, i);
+                            setDragIndex(null); setDragOverIndex(null);
+                          }}
+                          className={`flex items-center justify-between rounded-xl border px-3 py-2.5 transition-all duration-150 cursor-grab active:cursor-grabbing select-none
+                            ${
+                              dragIndex === i
+                                ? "opacity-40 border-dashed border-orange-300 bg-orange-50/30 scale-[0.98]"
+                                : dragOverIndex === i
+                                ? "border-indigo-400 bg-indigo-50/60 shadow-md shadow-indigo-100 scale-[1.01]"
+                                : "border bg-muted/30 hover:bg-muted/50"
+                            }`
+                          }
+                        >
                           <div className="flex items-center gap-2.5">
-                            <span className="text-xs font-bold text-muted-foreground w-4">{i + 1}</span>
+                            <GripVertical className="h-4 w-4 text-muted-foreground/40 flex-shrink-0" />
+                            <span className="text-xs font-bold text-muted-foreground w-5 text-center">{i + 1}</span>
                             <div>
-                              <p className="text-sm font-medium">{q.candidateName}</p>
+                              <p className="text-sm font-semibold">{q.candidateName}</p>
                               <p className="text-xs font-mono text-muted-foreground">{q.candidateCode}</p>
                             </div>
                           </div>
@@ -1446,38 +1475,18 @@ function PanelsTab({ toast, qc, candidates, specialities }: {
                                 <ArrowRight className="h-3 w-3" /> Call
                               </Button>
                             )}
-                            <Button 
-                              size="icon" 
-                              variant="ghost" 
-                              className="h-7 w-7 p-0 text-muted-foreground hover:text-indigo-600 hover:bg-indigo-50"
-                              disabled={i === 0 || reorderQueueMutation.isPending}
-                              onClick={() => handleMoveUp(i)}
-                              title="Move Up"
-                            >
-                              <ChevronUp className="h-4 w-4" />
-                            </Button>
-                            <Button 
-                              size="icon" 
-                              variant="ghost" 
-                              className="h-7 w-7 p-0 text-muted-foreground hover:text-indigo-600 hover:bg-indigo-50"
-                              disabled={i === waitingQueue.length - 1 || reorderQueueMutation.isPending}
-                              onClick={() => handleMoveDown(i)}
-                              title="Move Down"
-                            >
-                              <ChevronDown className="h-4 w-4" />
-                            </Button>
-                            <Button 
-                              size="icon" 
-                              variant="ghost" 
+                            <Button
+                              size="icon"
+                              variant="ghost"
                               className="h-7 w-7 p-0 text-muted-foreground hover:text-orange-600 hover:bg-orange-50"
                               onClick={() => setReassignCandidate(q)}
                               title="Reassign to another panel"
                             >
                               <ExternalLink className="h-4 w-4" />
                             </Button>
-                            <Button 
-                              size="icon" 
-                              variant="ghost" 
+                            <Button
+                              size="icon"
+                              variant="ghost"
                               className="h-7 w-7 p-0 text-muted-foreground hover:text-destructive hover:bg-destructive/10"
                               onClick={() => {
                                 if (window.confirm(`Remove ${q.candidateName} from the queue?`)) {
@@ -1971,6 +1980,14 @@ function MarkSheetTab({ specialities, candidates, scores, isCEC, toast, doctors 
               >
                 <FileText className="h-4 w-4 text-orange-200" />
                 Export Excel Sheet
+              </Button>
+              <Button
+                onClick={() => window.open(`/api/interviews/scores/specialty-export?token=${localStorage.getItem("fellowship_token")}`, "_blank")}
+                variant="outline"
+                className="gap-2 border-indigo-200 text-indigo-700 hover:bg-indigo-50 font-bold h-10 px-5 rounded-xl text-xs uppercase tracking-wider shadow-sm transition-all active:scale-95 duration-150"
+              >
+                <FileText className="h-4 w-4 text-indigo-500" />
+                Specialty Breakdown
               </Button>
             </div>
           </div>
