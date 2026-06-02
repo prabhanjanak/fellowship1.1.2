@@ -312,22 +312,24 @@ export default function DashboardPage() {
             Candidate Specialty Matrix
           </span>
         </button>
-        <button
-          onClick={() => setDashboardTab("sessions")}
-          className={`pb-3 font-extrabold text-sm transition-all border-b-2 px-2 relative ${
-            dashboardTab === "sessions"
-              ? "border-orange-500 text-slate-900 font-black"
-              : "border-transparent text-slate-500 hover:text-slate-700"
-          }`}
-        >
-          <span className="flex items-center gap-2">
-            <Globe2 className="h-4 w-4" />
-            Active Logins & Sessions
-            <Badge className="bg-orange-100 text-orange-600 rounded-full px-1.5 py-0.5 text-[10px] border-none font-bold">
-              {activeSessions.length}
-            </Badge>
-          </span>
-        </button>
+        {(role === "super_admin" || role === "program_admin") && (
+          <button
+            onClick={() => setDashboardTab("sessions")}
+            className={`pb-3 font-extrabold text-sm transition-all border-b-2 px-2 relative ${
+              dashboardTab === "sessions"
+                ? "border-orange-500 text-slate-900 font-black"
+                : "border-transparent text-slate-500 hover:text-slate-700"
+            }`}
+          >
+            <span className="flex items-center gap-2">
+              <Globe2 className="h-4 w-4" />
+              Active Logins & Sessions
+              <Badge className="bg-orange-100 text-orange-600 rounded-full px-1.5 py-0.5 text-[10px] border-none font-bold">
+                {activeSessions.length}
+              </Badge>
+            </span>
+          </button>
+        )}
       </div>
 
       {dashboardTab === "candidates" ? (
@@ -598,79 +600,81 @@ export default function DashboardPage() {
       )}
 
       {/* ── THIRD SECTION: CONFIG & DOCK CONTROLS ───────────────────────────── */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+      {(role === "super_admin" || role === "program_admin") && (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
 
-        {/* Dynamic Timeout Config */}
-        <div className="bg-white rounded-3xl shadow-lg border border-orange-100 p-6 space-y-4">
-          <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
-            <KeyRound className="h-4 w-4 text-orange-500" />
-            Session Inactivity Setting
-          </h4>
-          <p className="text-xs text-slate-500 leading-relaxed">
-            Define the session inactivity limit. Inactive users are automatically logged out after this duration.
-          </p>
-          <div className="flex gap-2">
-            <Input
-              type="number"
-              min={1}
-              max={1440}
-              value={timeoutMinutes}
-              onChange={(e) => setTimeoutMinutes(e.target.value)}
-              placeholder="Minutes..."
-              className="h-10 rounded-xl border-slate-200 focus:ring-orange-500 text-sm font-bold font-mono"
-            />
-            <Button
-              disabled={!timeoutMinutes || saveTimeoutMutation.isPending}
-              onClick={() => saveTimeoutMutation.mutate(timeoutMinutes)}
-              className="bg-slate-900 hover:bg-slate-800 text-white font-extrabold h-10 px-4 rounded-xl text-xs uppercase"
-            >
-              Apply
-            </Button>
-          </div>
-        </div>
-
-        {/* Export Card */}
-        <div className="relative overflow-hidden rounded-3xl shadow-xl bg-gradient-to-br from-orange-600 to-amber-500">
-          <div className="absolute top-0 right-0 w-40 h-40 bg-white/10 rounded-full -mr-16 -mt-16 blur-2xl" />
-          <div className="relative z-10 p-6 space-y-4">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-white/20 flex items-center justify-center">
-                <BarChart3 className="h-5 w-5 text-white" />
-              </div>
-              <div>
-                <p className="text-[9px] font-bold text-orange-100 uppercase tracking-[0.25em]">Appraisal Engine</p>
-                <h4 className="text-lg font-black text-white tracking-tight">Cycle Appraisal Excel</h4>
-              </div>
-            </div>
-            <p className="text-xs text-orange-100 leading-relaxed">
-              Download structured spreadsheets containing candidate ranking, specialization matrices, and evaluators.
+          {/* Dynamic Timeout Config */}
+          <div className="bg-white rounded-3xl shadow-lg border border-orange-100 p-6 space-y-4">
+            <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
+              <KeyRound className="h-4 w-4 text-orange-500" />
+              Session Inactivity Setting
+            </h4>
+            <p className="text-xs text-slate-500 leading-relaxed">
+              Define the session inactivity limit. Inactive users are automatically logged out after this duration.
             </p>
-            <button
-              onClick={async () => {
-                try {
-                  const blob = await api.getBlob("/reports/cycle-report");
-                  const url = window.URL.createObjectURL(blob);
-                  const link = document.createElement("a");
-                  link.href = url;
-                  link.setAttribute("download", `SAV_Cycle_Report_${new Date().toISOString().split('T')[0]}.xlsx`);
-                  document.body.appendChild(link);
-                  link.click();
-                  link.remove();
-                  window.URL.revokeObjectURL(url);
-                  toast({ title: "Cycle Report Downloaded", description: "Successfully downloaded SAV_Cycle_Report.xlsx" });
-                } catch {
-                  toast({ title: "Download Failed", description: "Could not generate cycle report", variant: "destructive" });
-                }
-              }}
-              className="w-full h-11 bg-white text-orange-600 font-black text-xs uppercase tracking-widest rounded-xl hover:bg-orange-50 transition-all shadow-lg flex items-center justify-center gap-2"
-            >
-              <RefreshCw className="h-4 w-4" />
-              Download Cycle Report
-            </button>
+            <div className="flex gap-2">
+              <Input
+                type="number"
+                min={1}
+                max={1440}
+                value={timeoutMinutes}
+                onChange={(e) => setTimeoutMinutes(e.target.value)}
+                placeholder="Minutes..."
+                className="h-10 rounded-xl border-slate-200 focus:ring-orange-500 text-sm font-bold font-mono"
+              />
+              <Button
+                disabled={!timeoutMinutes || saveTimeoutMutation.isPending}
+                onClick={() => saveTimeoutMutation.mutate(timeoutMinutes)}
+                className="bg-slate-900 hover:bg-slate-800 text-white font-extrabold h-10 px-4 rounded-xl text-xs uppercase"
+              >
+                Apply
+              </Button>
+            </div>
           </div>
-        </div>
 
-      </div>
+          {/* Export Card */}
+          <div className="relative overflow-hidden rounded-3xl shadow-xl bg-gradient-to-br from-orange-600 to-amber-500">
+            <div className="absolute top-0 right-0 w-40 h-40 bg-white/10 rounded-full -mr-16 -mt-16 blur-2xl" />
+            <div className="relative z-10 p-6 space-y-4">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-white/20 flex items-center justify-center">
+                  <BarChart3 className="h-5 w-5 text-white" />
+                </div>
+                <div>
+                  <p className="text-[9px] font-bold text-orange-100 uppercase tracking-[0.25em]">Appraisal Engine</p>
+                  <h4 className="text-lg font-black text-white tracking-tight">Cycle Appraisal Excel</h4>
+                </div>
+              </div>
+              <p className="text-xs text-orange-100 leading-relaxed">
+                Download structured spreadsheets containing candidate ranking, specialization matrices, and evaluators.
+              </p>
+              <button
+                onClick={async () => {
+                  try {
+                    const blob = await api.getBlob("/reports/cycle-report");
+                    const url = window.URL.createObjectURL(blob);
+                    const link = document.createElement("a");
+                    link.href = url;
+                    link.setAttribute("download", `SAV_Cycle_Report_${new Date().toISOString().split('T')[0]}.xlsx`);
+                    document.body.appendChild(link);
+                    link.click();
+                    link.remove();
+                    window.URL.revokeObjectURL(url);
+                    toast({ title: "Cycle Report Downloaded", description: "Successfully downloaded SAV_Cycle_Report.xlsx" });
+                  } catch {
+                    toast({ title: "Download Failed", description: "Could not generate cycle report", variant: "destructive" });
+                  }
+                }}
+                className="w-full h-11 bg-white text-orange-600 font-black text-xs uppercase tracking-widest rounded-xl hover:bg-orange-50 transition-all shadow-lg flex items-center justify-center gap-2"
+              >
+                <RefreshCw className="h-4 w-4" />
+                Download Cycle Report
+              </button>
+            </div>
+          </div>
+
+        </div>
+      )}
 
       {/* ── TV Access Code Dialog ───────────────────────────────────────── */}
       <Dialog open={tvCodeOpen} onOpenChange={setTvCodeOpen}>

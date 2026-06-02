@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { desc, eq } from "drizzle-orm";
+import { desc, eq, sql } from "drizzle-orm";
 import {
   db,
   candidatesTable,
@@ -13,7 +13,7 @@ import {
   unitsTable,
   applicationSubmissionsTable,
 } from "@workspace/db";
-import { requireAuth } from "../middleware/auth";
+import { requireAuth, requireRole } from "../middleware/auth";
 import { parseSpecializationString } from "../lib/utils";
 
 const router: Router = Router();
@@ -244,6 +244,103 @@ router.get("/dashboard/recent-activity", requireAuth, async (req: any, res) => {
   }
   items.sort((a, b) => (a.at < b.at ? 1 : -1));
   res.json(items.slice(0, 12));
+});
+
+// Doctor: Get personal session statistics (read-only dashboard)
+router.get("/dashboard/doctor-stats", requireAuth, requireRole("doctor"), async (req: any, res) => {
+  const doctorId = req.user!.userId;
+
+  // 1. Find the doctor's active panel and speciality
+  const panelQuery = await db.execute(sql`
+    SELECT ip.id as panel_id, ip.name as panel_name, ip.speciality_id,
+           s.name as speciality_name
+    FROM interview_panel_members ipm
+    JOIN interview_panels ip ON ip.id = ipm.panel_id
+    LEFT JOIN specialities s ON s.id = ip.speciality_id
+    WHERE ipm.doctor_id = ${doctorId} AND ip.is_active = TRUE
+    LIMIT 1
+  `);
+  const activePanel = panelQuery.rows[0] as {
+    panel_id: number;
+    panel_name: string;
+    speciality_id: number | null;
+    speciality_name: string | null;
+  } | undefined;
+
+  // 2. Total assigned to this doctor (via panel queue if panel exists, else assignments table)
+  let totalAssigned = 0;
+  let totalCompleted = 0;
+  let remaining = 0;
+  let avgInterviewMinutes: number | null = null;
+  let panelName: string | null = null;
+  let specialityName: string | null = null;
+
+  if (activePanel) {
+    panelName = activePanel.panel_name;
+    specialityName = activePanel.speciality_name;
+
+    const queueCountQuery = await db.execute(sql`
+      SELECT COUNT(*) as total,
+             SUM(CASE WHEN status = 'completed' THEN 1 ELSE 0 END) as completed_count
+      FROM panel_queue
+      WHERE panel_id = ${activePanel.panel_id}
+    `);
+    const row = queueCountQuery.rows[0] as { total: string; completed_count: string } | undefined;
+    totalAssigned = Number(row?.total ?? 0);
+    totalCompleted = Number(row?.completed_count ?? 0);
+    remaining = totalAssigned - totalCompleted;
+  } else {
+    // Fallback: use doctor_assignments table
+    const assignRows = await db.execute(sql`
+      SELECT COUNT(*) as total,
+             SUM(CASE WHEN da.status = 'completed' THEN 1 ELSE 0 END) as done
+      FROM doctor_assignments da
+      WHERE da.doctor_id = ${doctorId}
+    `);
+    const row = assignRows.rows[0] as { total: string; done: string } | undefined;
+    totalAssigned = Number(row?.total ?? 0);
+    totalCompleted = Number(row?.done ?? 0);
+    remaining = totalAssigned - totalCompleted;
+  }
+
+  // 3. Avg interview duration from interview_scores for this doctor
+  const avgQuery = await db.execute(sql`
+    SELECT AVG(EXTRACT(EPOCH FROM (submitted_at - created_at)) / 60) as avg_minutes
+    FROM interview_scores
+    WHERE doctor_id = ${doctorId}
+  `);
+  const avgRow = avgQuery.rows[0] as { avg_minutes: string | null } | undefined;
+  if (avgRow?.avg_minutes) {
+    avgInterviewMinutes = Math.round(Number(avgRow.avg_minutes) * 10) / 10;
+  }
+
+  // 4. Recent scored candidates (last 5)
+  const recentScores = await db.execute(sql`
+    SELECT ist.id, ist.candidate_id, ist.score, ist.submitted_at,
+           c.full_name as candidate_name, c.candidate_code
+    FROM interview_scores ist
+    JOIN candidates c ON c.id = ist.candidate_id
+    WHERE ist.doctor_id = ${doctorId}
+    ORDER BY ist.submitted_at DESC
+    LIMIT 5
+  `);
+
+  res.json({
+    panelName,
+    specialityName,
+    totalAssigned,
+    totalCompleted,
+    remaining,
+    avgInterviewMinutes,
+    recentlyScoredCandidates: recentScores.rows.map((r: any) => ({
+      id: Number(r.id),
+      candidateId: Number(r.candidate_id),
+      candidateName: String(r.candidate_name ?? ""),
+      candidateCode: String(r.candidate_code ?? ""),
+      score: Number(r.score),
+      scoredAt: r.submitted_at ? new Date(r.submitted_at as string).toISOString() : null,
+    })),
+  });
 });
 
 export default router;

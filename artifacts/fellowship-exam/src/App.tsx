@@ -10,6 +10,7 @@ import { PageTransition } from "./components/PageTransition";
 import LoginPage from "./pages/LoginPage";
 import ForcePasswordResetPage from "./pages/ForcePasswordResetPage";
 import DashboardPage from "./pages/DashboardPage";
+import DoctorDashboardPage from "./pages/DoctorDashboardPage";
 import CandidatesPage from "./pages/CandidatesPage";
 import ExamsPage from "./pages/ExamsPage";
 import ExamDashboardPage from "./pages/ExamDashboardPage";
@@ -66,7 +67,9 @@ function AppRouter() {
       <main className="flex-1 overflow-y-auto pt-14 md:pt-0 relative z-10">
         <PageTransition>
           <Switch>
-            <Route path="/" component={DashboardPage} />
+            <Route path="/">
+              {() => user?.role === "doctor" ? <DoctorDashboardPage /> : <DashboardPage />}
+            </Route>
             <Route path="/programs" component={ProgramsPage} />
             <Route path="/users" component={UsersPage} />
             <Route path="/candidates" component={CandidatesPage} />
@@ -90,7 +93,9 @@ function AppRouter() {
             <Route path="/display" component={DisplayPage} />
             <Route path="/tv" component={QueueDisplayPage} />
             <Route path="/verify-lor" component={VerifyLorPage} />
-            <Route path="/active-sessions" component={ActiveSessionsPage} />
+            {(user?.role === "super_admin" || user?.role === "program_admin" || user?.role === "central_exam_coordinator") && (
+              <Route path="/active-sessions" component={ActiveSessionsPage} />
+            )}
             <Route component={NotFound} />
           </Switch>
         </PageTransition>

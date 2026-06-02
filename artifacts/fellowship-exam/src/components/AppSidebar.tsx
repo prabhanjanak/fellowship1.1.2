@@ -56,7 +56,7 @@ const navItems: NavItem[] = [
   { label: "Reports",           href: "/reports",            icon: BarChart3,       roles: ["super_admin", "program_admin", "central_exam_coordinator", "exam_coordinator"] },
   { label: "My Results",        href: "/results",            icon: FileText,        roles: ["student"] },
   { label: "Waiting Hall (TV)",   href: "/tv",              icon: Monitor,         roles: ["super_admin", "program_admin", "central_exam_coordinator", "display_operator"] },
-  { label: "Active Sessions",     href: "/active-sessions",    icon: Activity,        roles: ["super_admin", "program_admin", "central_exam_coordinator"] },
+  { label: "Active Sessions",     href: "/active-sessions",    icon: Activity,        roles: ["super_admin", "program_admin"] },
 ];
 
 const roleLabel: Record<string, string> = {
