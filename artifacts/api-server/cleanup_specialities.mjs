@@ -10,6 +10,7 @@ async function main() {
     const __dirname = path.dirname(__filename);
     const envPath = path.resolve(__dirname, '.env');
     if (fs.existsSync(envPath)) {
+      console.log(`[INFO] Found local .env file at: ${envPath}`);
       const envContent = fs.readFileSync(envPath, 'utf8');
       for (const line of envContent.split('\n')) {
         const trimmed = line.trim();
@@ -17,21 +18,30 @@ async function main() {
         const idx = trimmed.indexOf('=');
         if (idx > 0) {
           const key = trimmed.slice(0, idx).trim();
-          const val = trimmed.slice(idx + 1).trim().replace(/^['"]|['"]$/g, '');
+          const val = trimmed.slice(idx + 1).trim()
+            .replace(/\r/g, '') // remove trailing carriage return
+            .replace(/^['"]|['"]$/g, ''); // remove quotes
           process.env[key] = val;
         }
       }
+    } else {
+      console.warn(`[WARNING] No local .env file found at: ${envPath}. Using environment variables.`);
     }
   } catch (err) {
-    console.warn("Failed to load .env file automatically:", err.message);
+    console.warn("[WARNING] Failed to load .env file automatically:", err.message);
   }
 
   // Use production DATABASE_URL if available, otherwise fallback to local connection string
   const connectionString = process.env.DATABASE_URL || "postgresql://postgres:admin@localhost:5432/fellowship_db";
+  
+  // Mask connection string password for secure logging
+  const maskedConnection = connectionString.replace(/:([^:@]+)@/, ':***@');
+  console.log(`[INFO] Connecting to database using: ${maskedConnection}`);
+
   const client = new pg.Client({ connectionString });
   await client.connect();
 
-  console.log(`Connected to database. Starting robust specialty cleanup...`);
+  console.log(`Connected to database successfully! Starting robust specialty cleanup...`);
 
   // 1. Fetch all existing specialties
   const specRes = await client.query("SELECT id, name, code, program_id FROM specialities ORDER BY id ASC");
